@@ -1,0 +1,48 @@
+{
+  "$schema": "https://developers.reddit.com/schema/config-file.v1.json",
+  "name": "queuezero",
+  "post": {
+    "dir": "dist/client",
+    "entrypoints": {
+      "default": {
+        "inline": false,
+        "entry": "dashboard.html"
+      },
+      "splash": {
+        "inline": true,
+        "entry": "splash.html"
+      }
+    }
+  },
+  "server": {
+    "dir": "dist/server",
+    "entry": "index.cjs"
+  },
+  "menu": {
+    "items": [
+      {
+        "label": "Open Mod Queue Command Center",
+        "description": "Mod Queue Command Center",
+        "location": "subreddit",
+        "forUserType": "moderator",
+        "endpoint": "/internal/menu/create-post"
+      }
+    ]
+  },
+  "forms": {
+    "banUser": "/internal/form/ban-user",
+    "bulkBan": "/internal/form/bulk-ban",
+    "warnUser": "/internal/form/warn-user",
+    "removeAndBan": "/internal/form/remove-and-ban"
+  },
+  "triggers": {
+    "onAppInstall": "/internal/trigger/on-install"
+  },
+  "scripts": {
+    "dev": "vite build --watch",
+    "build": "vite build"
+  },
+  "dev": {
+    "subreddit": "queuezero_dev"
+  }
+}
