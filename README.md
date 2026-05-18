@@ -1,6 +1,4 @@
-**File: `README.md`**
 
-```md
 # MQCC — Mod Queue Command Center
 
 A real-time moderation dashboard for Reddit, built on Devvit. MQCC gives subreddit moderators a single interface to triage, prioritize, and act on reported content — without switching between tabs, guessing severity, or losing track of repeat offenders.
