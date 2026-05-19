@@ -1,4 +1,3 @@
-
 # MQCC — Mod Queue Command Center
 
 ![Devvit](https://img.shields.io/badge/Platform-Devvit-FF4500?style=flat-square&logo=reddit)
@@ -72,9 +71,9 @@ MQCC follows a client-server split mandated by the Devvit platform: server-side 
 │  │  │ community.ts   │  │ contextEnricher.ts       │   │  │
 │  │  │ forms.ts       │  │ priorityScorer.ts        │   │  │
 │  │  │ menu.ts        │  │ patternDetector.ts       │   │  │
-│  │  │ seed.ts        │  │ alertSystem.ts           │   │  │
-│  │  │ triggers.ts    │  │ modActions.ts            │   │  │
-│  │  └───────────────┘  │ activityTracker.ts        │   │  │
+│  │  │ triggers.ts    │  │ alertSystem.ts           │   │  │
+│  │  └───────────────┘  │ modActions.ts            │   │  │
+│  │                      │ activityTracker.ts        │   │  │
 │  │                      │ permissions.ts            │   │  │
 │  │                      │ rateLimiter.ts            │   │  │
 │  │                      │ settings.ts               │   │  │
@@ -201,7 +200,7 @@ Anomaly state is persisted in Redis (`mqcc:alertstate:{subredditId}`) with a 24-
 
 **Workload Tab.** Fetches data from `activityTracker.ts` and renders: three-stat grid (total actions, active mods, flagged users), actions-by-type horizontal bar chart (approve/remove/ban/lock with percentage breakdowns), per-mod activity breakdown with proportional bars, top flagged users table ranked by action count with severity coloring (>= 5 actions = red, >= 3 = orange), and a recent action feed (last 15 actions with timestamp-relative display).
 
-**Settings Tab.** Persistent configuration stored in Redis via `settings.ts`: auto-refresh toggle (on/off), refresh interval selector (10s, 30s, 1m, 2m, 5m), compact mode toggle, group spam rings toggle, anomaly alerts toggle. Also includes a "Generate Test Data" / "Clear Test Data" section that calls the `/api/seed` endpoint to populate the dashboard with realistic demo data (100 mod actions, 25 queue items, 12 queue appearances across 15 test authors).
+**Settings Tab.** Persistent configuration stored in Redis via `settings.ts`: auto-refresh toggle (on/off), refresh interval selector (10s, 30s, 1m, 2m, 5m), compact mode toggle, group spam rings toggle, anomaly alerts toggle.
 
 ### Public Dashboard (Unauthenticated / Non-Mod View)
 
@@ -232,7 +231,7 @@ Rendered in the Reddit feed via `splash.html`. Displays a compact card with gold
 | Priority Scorer | `priorityScorer.ts` | Pure function: `(RawQueueItem, UserContext) => PriorityScore`. Seven-factor weighted scoring algorithm (see [Priority Scoring Algorithm](#priority-scoring-algorithm)). Score 0-100 with four severity levels. |
 | Pattern Detector | `patternDetector.ts` | Pure function: `(EnrichedQueueItem[]) => PatternResult`. Three detection methods: link clusters via domain extraction, time bursts via 1-hour sliding window, username patterns via regex matching (see [Pattern Detection](#pattern-detection)). |
 | Alert System | `alertSystem.ts` | Stateful anomaly detection with Redis-backed cooldown. Four checks: report spike, new account flood, repeat offenders, ban evasion (see [Anomaly Detection](#anomaly-detection)). Alert state persisted with 24h TTL. |
-| Mod Actions | `modActions.ts` | Executes Reddit API calls: `approve`, `remove`, `lock`, `banUser`. Each action records a `ModActionRecord` in Redis (max 500 records, 30-day TTL). Ban duration normalized to nearest valid value from `[0, 1, 3, 7, 14, 30, 999]`. |
+| Mod Actions | `modActions.ts` | Executes Reddit API calls: `approve`, `remove`, `lock`, `banUser`. Each action records a `ModActionRecord` in Redis (max 500 records, 30-day TTL). Ban duration normalized to nearest valid value from `[0, 1, 3, 7, 14, 30]`. |
 | Activity Tracker | `activityTracker.ts` | Aggregates mod action history into workload statistics: actions by mod, by type, by hour, by day. Computes coverage gaps (hours with zero activity). Identifies top flagged users. Generates leaderboards (contributors/comments/karma) filtered by time range. Results cached for 5-15 minutes. |
 | Permissions | `permissions.ts` | Resolves current user via `reddit.getCurrentUsername`, checks against stored moderator list in Redis. First user bootstrapped as moderator on initial setup. Provides `requireMod()` guard for protected endpoints. |
 | Rate Limiter | `rateLimiter.ts` | Sliding-window rate limiter backed by Redis. Default: 30 req/min. Action endpoints: 10 req/min. Bulk operations: 5 req/5min. Fails open on Redis errors. |
@@ -240,7 +239,6 @@ Rendered in the Reddit feed via `splash.html`. Displays a compact card with gold
 | Settings | `settings.ts` | Reads/writes per-subreddit settings in Redis. Validates priority weights sum to ~1.0 (normalizes if not). Clamps refresh interval to 10s-300s range. |
 | Logger | `logger.ts` | Structured JSON logger writing to `console.log`/`console.warn`/`console.error`. Every entry includes `timestamp`, `module`, `level`, `message`, and optional data fields. |
 | Post | `post.ts` | Creates and searches for dashboard posts via `reddit.submitCustomPost` and `reddit.getHotPosts`. |
-| Seed | `seed.ts` | Test data generator: creates 100 mod actions, 25 queue items, and queue appearance counts across 15 test authors and 3 test mods. `/api/seed/clear` removes all generated data. |
 
 ---
 
@@ -261,8 +259,7 @@ Rendered in the Reddit feed via `splash.html`. Displays a compact card with gold
 | `ConfirmDialog.tsx` | Confirmation modal for destructive actions. Shows warning icon for danger actions, title, message, Cancel/Confirm buttons with loading state. |
 | `EmptyState.tsx` | Centered empty state with checkmark icon, title, and description. Memoized. |
 | `LoadingState.tsx` | Centered spinner with configurable message. Memoized. |
-| `ErrorBanner.tsx` | Error display with icon, message text, and optional "Retry" button. Memoized. |
-| `TopFlaggedUsers.tsx` | Ranked table of users with action counts, severity-colored badges, and background bars proportional to max count. |
+| `ErrorBoundary.tsx` | React error boundary with error message display and reload button. Catches unhandled rendering errors and prevents full-page crashes. |
 
 ### Custom Hooks
 
@@ -361,8 +358,6 @@ Rendered in the Reddit feed via `splash.html`. Displays a compact card with gold
 | POST | `/api/action/removeAndBan` | Remove item and ban author | Mod |
 | POST | `/api/action/bulk` | Execute bulk action on multiple items | Mod |
 | GET | `/api/community?subreddit=` | Fetch public community data | None |
-| POST | `/api/seed` | Generate test data | Mod |
-| POST | `/api/seed/clear` | Remove test data | Mod |
 
 ---
 
@@ -397,6 +392,7 @@ npm run launch    # deploy + publish to App Directory
 | `npm run build` | Build client and server bundles |
 | `npm run type-check` | Run TypeScript type checking |
 | `npm run lint` | Run ESLint across all source files |
+| `npm run test` | Run Vitest test suite |
 | `npm run deploy` | Type-check, lint, and upload to Devvit |
 | `npm run launch` | Deploy and publish to App Directory |
 
@@ -425,13 +421,12 @@ src/
       Dashboard.tsx            Root component: tab routing, state orchestration
       DetailModal.tsx          Full item detail with user profile and actions
       EmptyState.tsx           Empty state placeholder
-      ErrorBanner.tsx          Error display with retry option
+      ErrorBoundary.tsx        React error boundary with reload fallback
       LoadingState.tsx         Loading spinner
       PatternAlert.tsx         Pattern detection alert cards
       PriorityQueue.tsx        Grouped + individual queue rendering
       PublicDashboard.tsx      Community-facing leaderboard view
       QueueItem.tsx            Single queue row with actions
-      TopFlaggedUsers.tsx      Ranked flagged users table
       WorkloadTab.tsx          Mod activity analytics
     hooks/
       usePatterns.ts           Pattern detection data fetching
@@ -444,6 +439,8 @@ src/
     splash.tsx                 Inline view React entry point
     index.css                  Design system: tokens, components, responsive
     module.d.ts                TypeScript module declarations
+    utils/
+      time.ts                  Relative timestamp formatting
   server/
     core/
       activityTracker.ts       Mod action aggregation and leaderboard generation
@@ -461,11 +458,10 @@ src/
       rateLimiter.ts           Sliding-window rate limiter
       settings.ts              Per-subreddit settings read/write/validate
     routes/
-      api.ts                   REST API handler (20 endpoints)
+      api.ts                   REST API handler (17 endpoints)
       community.ts             Public community data with 3-layer fallback
       forms.ts                 Form submission handlers (ban, bulk-ban, remove-and-ban)
       menu.ts                  Subreddit menu action handler
-      seed.ts                  Test data generation and cleanup
       triggers.ts              App install trigger (bootstrap first mod)
     index.ts                   Hono server entry point
   shared/
@@ -483,6 +479,7 @@ vite.config.ts                 Vite build configuration
 eslint.config.js               ESLint configuration
 tsconfig.json                  TypeScript project references
 package.json                   Dependencies and scripts
+vitest.config.ts               Vitest test configuration
 ```
 
 ---
@@ -503,6 +500,21 @@ package.json                   Dependencies and scripts
 
 ---
 
+## Testing
+
+The project includes unit tests for core algorithms using Vitest:
+
+```bash
+npm run test
+```
+
+| Test Suite | Coverage |
+|---|---|
+| `patternDetector.test.ts` | 15 test cases covering link cluster detection (domain extraction, www stripping, multi-cluster, dedup), time burst detection (3+ items in 1h window, new account threshold, edge cases), username pattern detection (all 5 regex patterns, case insensitivity, threshold enforcement), and combined pattern scenarios |
+| `priorityScorer.test.ts` | 28 test cases covering all 7 scoring factors, spam keyword detection, score cap at 100, severity level thresholds, factors array limits, unknown data handling (-1 sentinels), and post/comment parity |
+
+---
+
 ## Built With
 
 | Technology | Version | Role |
@@ -514,15 +526,10 @@ package.json                   Dependencies and scripts
 | [Vite](https://vite.dev/) | 8.0.12 | Build tooling and development server |
 | [Tailwind CSS](https://tailwindcss.com/) | 4.3.0 | Build-time CSS processing (via Vite plugin) |
 | [Redis](https://redis.io/) | Platform-managed | In-memory data store for caching and persistence |
+| [Vitest](https://vitest.dev/) | 4.1.6 | Unit testing framework |
 
 ---
 
 ## License
 
 MIT
-<<<<<<< HEAD
-```
-
-This README is written to be read by judges and developers. It leads with the problem, explains what the app actually does in plain language, gives enough technical depth to show it is a real project, and does not oversell anything. It reads like documentation written by someone who built the thing, not like marketing copy.
-=======
->>>>>>> 1499796 (Polish: fix license, clean dead code, add ErrorBoundary, update README)

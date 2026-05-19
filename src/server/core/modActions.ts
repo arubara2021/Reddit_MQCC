@@ -1,66 +1,66 @@
-import { redis, reddit, context } from '@devvit/web/server';
-import { REDIS_KEYS } from './constants';
+import { reddit, redis, context } from '@devvit/web/server';
 import { log } from './logger';
+import { REDIS_KEYS, TTL } from './constants';
 import type { ModActionRecord } from '../../shared/api';
 
-interface ActionResult {
-  success: boolean;
-  message: string;
+type ActionResult = { success: boolean; message: string };
+
+const VALID_BAN_DURATIONS = [0, 1, 3, 7, 14, 30];
+
+export function getDurationOptions(): Array<{ value: number; label: string }> {
+  return [
+    { value: 0, label: 'Permanent' },
+    { value: 1, label: '1 day' },
+    { value: 3, label: '3 days' },
+    { value: 7, label: '7 days' },
+    { value: 14, label: '14 days' },
+    { value: 30, label: '30 days' },
+  ];
 }
 
-export type BanDuration = 0 | 1 | 3 | 7 | 14 | 30 | 999;
-
-const VALID_DURATIONS: number[] = [0, 1, 3, 7, 14, 30, 999];
-
-function normalizeDuration(input: number | undefined): number {
-  if (input === undefined || input === null) return 0;
-  if (VALID_DURATIONS.includes(input)) return input;
+function normalizeBanDuration(days?: number): number {
+  if (!days || days <= 0) return 0;
   let closest = 0;
-  let minDiff = Infinity;
-  for (const d of VALID_DURATIONS) {
-    const diff = Math.abs(d - input);
-    if (diff < minDiff) {
-      minDiff = diff;
-      closest = d;
-    }
+  for (const valid of VALID_BAN_DURATIONS) {
+    if (valid > 0 && valid <= days) closest = valid;
   }
   return closest;
 }
 
-function formatDuration(days: number): string {
-  switch (days) {
-    case 0: return 'permanent';
-    case 1: return '1 day';
-    case 3: return '3 days';
-    case 7: return '7 days';
-    case 14: return '14 days';
-    case 30: return '30 days';
-    case 999: return 'permanent';
-    default: return days + ' days';
-  }
-}
-
-async function getCurrentModName(): Promise<string> {
+async function recordAction(
+  action: ModActionRecord['action'],
+  targetAuthor: string,
+  targetId: string,
+  reason: string | null
+): Promise<void> {
   try {
-    const name = await reddit.getCurrentUsername();
-    return name || 'unknown';
-  } catch {
-    return 'unknown';
-  }
-}
+    let modName = 'unknown';
+    try {
+      const username = await reddit.getCurrentUsername();
+      if (username) modName = username;
+    } catch {}
 
-async function recordAction(record: ModActionRecord): Promise<void> {
-  try {
     const key = REDIS_KEYS.MOD_ACTIONS + context.subredditId;
     const raw = await redis.get(key);
     const actions: ModActionRecord[] = raw ? JSON.parse(raw as string) : [];
-    actions.push(record);
+
+    actions.push({
+      action,
+      targetAuthor,
+      targetId,
+      reason,
+      modName,
+      timestamp: Date.now(),
+    });
+
     const trimmed = actions.slice(-500);
     await redis.set(key, JSON.stringify(trimmed), {
-      expiration: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      expiration: new Date(Date.now() + TTL.MOD_ACTIONS_MS),
     });
   } catch (e) {
     log('modActions', 'warn', 'Failed to record action', {
+      action,
+      targetAuthor,
       error: e instanceof Error ? e.message : String(e),
     });
   }
@@ -68,90 +68,78 @@ async function recordAction(record: ModActionRecord): Promise<void> {
 
 export async function approveItem(
   fullname: string,
-  authorName?: string
+  authorName: string
 ): Promise<ActionResult> {
   try {
-    log('modActions', 'info', 'Calling reddit.approve', { fullname });
-    await (reddit as any).approve(fullname);
-    log('modActions', 'info', 'reddit.approve succeeded', { fullname });
+    if (fullname.startsWith('t1_')) {
+      const comment = await reddit.getCommentById(fullname as `t1_${string}`);
+      await comment.approve();
+    } else if (fullname.startsWith('t3_')) {
+      const post = await reddit.getPostById(fullname as `t3_${string}`);
+      await post.approve();
+    } else {
+      return { success: false, message: 'Unknown content type: ' + fullname };
+    }
 
-    const modName = await getCurrentModName();
-    await recordAction({
-      action: 'approve',
-      targetAuthor: authorName || '',
-      targetId: fullname,
-      reason: null,
-      modName,
-      timestamp: Date.now(),
-    });
+    await recordAction('approve', authorName, fullname, null);
 
-    return { success: true, message: 'Approved' };
+    log('modActions', 'info', 'Content approved', { fullname, authorName });
+    return { success: true, message: 'Approved u/' + authorName };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    log('modActions', 'error', 'reddit.approve failed', {
-      fullname,
-      error: msg,
-    });
+    log('modActions', 'error', 'Approve failed', { fullname, authorName, error: msg });
     return { success: false, message: 'Approve failed: ' + msg };
   }
 }
 
 export async function removeItem(
   fullname: string,
-  authorName?: string
+  authorName: string
 ): Promise<ActionResult> {
   try {
-    log('modActions', 'info', 'Calling reddit.remove', { fullname });
-    await (reddit as any).remove(fullname, false);
-    log('modActions', 'info', 'reddit.remove succeeded', { fullname });
+    if (fullname.startsWith('t1_')) {
+      const comment = await reddit.getCommentById(fullname as `t1_${string}`);
+      await comment.remove();
+    } else if (fullname.startsWith('t3_')) {
+      const post = await reddit.getPostById(fullname as `t3_${string}`);
+      await post.remove();
+    } else {
+      return { success: false, message: 'Unknown content type: ' + fullname };
+    }
 
-    const modName = await getCurrentModName();
-    await recordAction({
-      action: 'remove',
-      targetAuthor: authorName || '',
-      targetId: fullname,
-      reason: null,
-      modName,
-      timestamp: Date.now(),
-    });
+    await recordAction('remove', authorName, fullname, null);
 
-    return { success: true, message: 'Removed' };
+    log('modActions', 'info', 'Content removed', { fullname, authorName });
+    return { success: true, message: 'Removed u/' + authorName };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    log('modActions', 'error', 'reddit.remove failed', {
-      fullname,
-      error: msg,
-    });
+    log('modActions', 'error', 'Remove failed', { fullname, authorName, error: msg });
     return { success: false, message: 'Remove failed: ' + msg };
   }
 }
 
 export async function lockItem(
   fullname: string,
-  authorName?: string
+  authorName: string
 ): Promise<ActionResult> {
   try {
-    log('modActions', 'info', 'Calling reddit.lock', { fullname });
-    await (reddit as any).lock(fullname);
-    log('modActions', 'info', 'reddit.lock succeeded', { fullname });
+    if (fullname.startsWith('t1_')) {
+      const comment = await reddit.getCommentById(fullname as `t1_${string}`);
+      await comment.lock();
+    } else if (fullname.startsWith('t3_')) {
+      const post = await reddit.getPostById(fullname as `t3_${string}`);
+      await post.lock();
+    } else {
+      return { success: false, message: 'Unknown content type: ' + fullname };
+    }
 
-    const modName = await getCurrentModName();
-    await recordAction({
-      action: 'lock',
-      targetAuthor: authorName || '',
-      targetId: fullname,
-      reason: null,
-      modName,
-      timestamp: Date.now(),
-    });
+    await recordAction('lock', authorName, fullname, null);
 
-    return { success: true, message: 'Locked' };
+    log('modActions', 'info', 'Content locked', { fullname, authorName });
+    return { success: true, message: 'Locked u/' + authorName };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    log('modActions', 'error', 'reddit.lock failed', {
-      fullname,
-      error: msg,
-    });
+    log('modActions', 'error', 'Lock failed', { fullname, authorName, error: msg });
     return { success: false, message: 'Lock failed: ' + msg };
   }
 }
@@ -167,57 +155,34 @@ export async function banUser(
       return { success: false, message: 'No subreddit context' };
     }
 
-    const duration = normalizeDuration(durationDays);
-    const durationLabel = formatDuration(duration);
+    const normalized = normalizeBanDuration(durationDays);
 
-    log('modActions', 'info', 'Calling reddit.banUser', {
+    const banOptions: Record<string, unknown> = {
+      subredditName,
+      username,
+    };
+
+    if (reason) banOptions.reason = reason;
+    if (normalized > 0) banOptions.duration = normalized;
+
+    await (reddit as any).banUser(banOptions);
+
+    await recordAction('ban', username, username, reason);
+
+    const durationLabel = normalized > 0 ? normalized + 'd' : 'permanent';
+    log('modActions', 'info', 'User banned', {
       username,
       subredditName,
       duration: durationLabel,
-      durationDays: duration,
-    });
-
-    await (reddit as any).banUser({
-      subredditName,
-      username,
-      reason: reason || 'Banned via MQCC',
-      duration,
-    });
-
-    log('modActions', 'info', 'reddit.banUser succeeded', {
-      username,
-      duration: durationLabel,
-    });
-
-    const modName = await getCurrentModName();
-    const actionLabel =
-      duration === 0 || duration === 999
-        ? 'ban (permanent)'
-        : 'ban (' + durationLabel + ')';
-
-    await recordAction({
-      action: 'ban',
-      targetAuthor: username,
-      targetId: '',
-      reason: (reason || 'Banned via MQCC') + ' [' + actionLabel + ']',
-      modName,
-      timestamp: Date.now(),
     });
 
     return {
       success: true,
-      message:
-        'u/' +
-        username +
-        ' banned' +
-        (duration > 0 && duration < 999 ? ' for ' + durationLabel : ''),
+      message: 'Banned u/' + username + ' (' + durationLabel + ')',
     };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    log('modActions', 'error', 'reddit.banUser failed', {
-      username,
-      error: msg,
-    });
+    log('modActions', 'error', 'Ban failed', { username, error: msg });
     return { success: false, message: 'Ban failed: ' + msg };
   }
 }
@@ -228,37 +193,35 @@ export async function removeAndBan(
   reason: string,
   durationDays?: number
 ): Promise<ActionResult> {
-  const removeResult = await removeItem(fullname, username);
-  const banResult = await banUser(
-    username,
-    reason || 'Coordinated spam via MQCC',
-    durationDays
-  );
+  try {
+    const removeResult = await removeItem(fullname, username);
+    if (!removeResult.success) {
+      log('modActions', 'warn', 'Remove failed during removeAndBan', {
+        fullname,
+        username,
+        error: removeResult.message,
+      });
+    }
 
-  if (removeResult.success && banResult.success) {
-    return {
-      success: true,
-      message: 'Removed and banned u/' + username,
-    };
+    const banResult = await banUser(username, reason, durationDays);
+    if (!banResult.success) {
+      return {
+        success: false,
+        message: 'Remove succeeded but ban failed: ' + banResult.message,
+      };
+    }
+
+    await recordAction('removeAndBan', username, fullname, reason);
+
+    log('modActions', 'info', 'Removed and banned', { fullname, username });
+    return { success: true, message: 'Removed & banned u/' + username };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    log('modActions', 'error', 'Remove and ban failed', {
+      fullname,
+      username,
+      error: msg,
+    });
+    return { success: false, message: 'Remove & ban failed: ' + msg };
   }
-
-  const errors: string[] = [];
-  if (!removeResult.success) errors.push('remove: ' + removeResult.message);
-  if (!banResult.success) errors.push('ban: ' + banResult.message);
-
-  return { success: false, message: errors.join('; ') };
-}
-
-export function getDurationOptions(): Array<{
-  value: number;
-  label: string;
-}> {
-  return [
-    { value: 1, label: '1 day' },
-    { value: 3, label: '3 days' },
-    { value: 7, label: '7 days' },
-    { value: 14, label: '14 days' },
-    { value: 30, label: '30 days' },
-    { value: 0, label: 'Permanent' },
-  ];
 }

@@ -197,6 +197,7 @@ export async function fetchModQueue(): Promise<RawQueueItem[]> {
     }
 
     return items;
+
   } catch (e) {
     log('queueFetcher', 'error', 'Queue fetch failed', {
       error: e instanceof Error ? e.message : String(e),

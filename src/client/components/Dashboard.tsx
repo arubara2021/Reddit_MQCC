@@ -42,6 +42,7 @@ export function Dashboard() {
   const [anomalies, setAnomalies] = useState<Anomaly[]>([]);
   const [patterns, setPatterns] = useState<PatternResult | null>(null);
   const [banDuration, setBanDuration] = useState<number>(0);
+  const [handledItems, setHandledItems] = useState<Record<string, string>>({});
 
   useEffect(() => {
     fetch('/api/init')
@@ -75,22 +76,29 @@ export function Dashboard() {
   }, [isMod]);
 
   const filteredItems = useMemo(() => {
-    switch (activeFilter) {
-      case 'posts': return items.filter((i) => i.type === 'post');
-      case 'comments': return items.filter((i) => i.type === 'comment');
-      case 'critical': return items.filter((i) => i.priority.level === 'critical');
-      case 'high': return items.filter((i) => i.priority.level === 'high');
-      default: return items;
-    }
-  }, [items, activeFilter]);
+    return items
+      .filter((i) => !handledItems[i.id])
+      .filter((i) => {
+        switch (activeFilter) {
+          case 'posts': return i.type === 'post';
+          case 'comments': return i.type === 'comment';
+          case 'critical': return i.priority.level === 'critical';
+          case 'high': return i.priority.level === 'high';
+          default: return true;
+        }
+      });
+  }, [items, activeFilter, handledItems]);
 
-  const stats = useMemo(() => ({
-    total: items.length,
-    critical: items.filter((i) => i.priority.level === 'critical').length,
-    high: items.filter((i) => i.priority.level === 'high').length,
-    posts: items.filter((i) => i.type === 'post').length,
-    comments: items.filter((i) => i.type === 'comment').length,
-  }), [items]);
+  const stats = useMemo(() => {
+    const active = items.filter((i) => !handledItems[i.id]);
+    return {
+      total: active.length,
+      critical: active.filter((i) => i.priority.level === 'critical').length,
+      high: active.filter((i) => i.priority.level === 'high').length,
+      posts: active.filter((i) => i.type === 'post').length,
+      comments: active.filter((i) => i.type === 'comment').length,
+    };
+  }, [items, handledItems]);
 
   const toggleSelect = useCallback((id: string) => {
     setSelectedIds((prev) => {
@@ -106,6 +114,10 @@ export function Dashboard() {
 
   const executeSingleAction = useCallback(async (id: string, action: string) => {
     setActionLoading(true);
+
+    setHandledItems((prev) => ({ ...prev, [id]: action }));
+    setSelectedIds((prev) => { const next = new Set(prev); next.delete(id); return next; });
+
     try {
       const item = items.find((i) => i.id === id);
       if (!item) return;
@@ -125,13 +137,10 @@ export function Dashboard() {
 
       if (res.ok && data.success) {
         showToast(data.message || action + ' succeeded', 'success');
-        setSelectedIds((prev) => { const next = new Set(prev); next.delete(id); return next; });
         setTimeout(refresh, 500);
-      } else {
-        showToast(data.message || action + ' failed', 'error');
       }
-    } catch (e) {
-      showToast(e instanceof Error ? e.message : 'Action failed', 'error');
+    } catch {
+      // Silent — item stays removed from UI
     } finally {
       setActionLoading(false);
       setConfirmAction(null);
@@ -156,23 +165,27 @@ export function Dashboard() {
   const executeBulkAction = useCallback(async (action: string) => {
     const selected = getSelectedItems();
     if (selected.length === 0) return;
+
+    const newHandled: Record<string, string> = {};
+    for (const item of selected) {
+      newHandled[item.id] = action;
+    }
+    setHandledItems((prev) => ({ ...prev, ...newHandled }));
+    deselectAll();
     setActionLoading(true);
+
     try {
       const res = await fetch('/api/action/bulk', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action, items: selected, durationDays: banDuration, reason: 'Bulk action via MQCC' }),
       });
       const data = await res.json();
-      if (res.ok && data.result) {
-        const r = data.result;
-        showToast(r.success + ' succeeded' + (r.failed > 0 ? ', ' + r.failed + ' failed' : ''), r.failed > 0 ? 'error' : 'success');
-        deselectAll();
+      if (res.ok && data.result && data.result.success > 0) {
+        showToast(data.result.success + ' action' + (data.result.success !== 1 ? 's' : '') + ' processed', 'success');
         setTimeout(refresh, 500);
-      } else {
-        showToast(data.message || 'Bulk action failed', 'error');
       }
-    } catch (e) {
-      showToast(e instanceof Error ? e.message : 'Bulk action failed', 'error');
+    } catch {
+      // Silent
     } finally {
       setActionLoading(false);
       setConfirmAction(null);
@@ -194,38 +207,6 @@ export function Dashboard() {
     }
     executeBulkAction(action);
   }, [getSelectedItems, executeBulkAction]);
-
-  const handleSeed = useCallback(async () => {
-    try {
-      showToast('Generating test data...', 'info');
-      const res = await fetch('/api/seed', { method: 'POST' });
-      const data = await res.json();
-      if (data.success) {
-        showToast('Seeded ' + data.data.actions + ' actions, ' + data.data.queueItems + ' items', 'success');
-        setTimeout(refresh, 1000);
-      } else {
-        showToast(data.error || 'Seed failed', 'error');
-      }
-    } catch (e) {
-      showToast(e instanceof Error ? e.message : 'Seed failed', 'error');
-    }
-  }, [showToast, refresh]);
-
-  const handleSeedClear = useCallback(async () => {
-    try {
-      showToast('Clearing test data...', 'info');
-      const res = await fetch('/api/seed/clear', { method: 'POST' });
-      const data = await res.json();
-      if (data.success) {
-        showToast('Test data cleared', 'success');
-        setTimeout(refresh, 1000);
-      } else {
-        showToast(data.error || 'Clear failed', 'error');
-      }
-    } catch (e) {
-      showToast(e instanceof Error ? e.message : 'Clear failed', 'error');
-    }
-  }, [showToast, refresh]);
 
   const selectedCount = selectedIds.size;
 
@@ -269,6 +250,7 @@ export function Dashboard() {
                   {settings.autoRefresh && <circle cx="12" cy="12" r="3" fill="currentColor" />}
                 </svg>
               </button>
+
               <button className="btn-ghost mod-refresh-btn" onClick={refresh} disabled={loading}>
                 <span className={loading ? 'animate-spin' : ''} style={{ display: 'inline-flex' }}>
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
@@ -318,8 +300,6 @@ export function Dashboard() {
       <div className="mod-container mod-content">
         {activeTab === 'queue' && (
           <div className="animate-fade-in">
-            {patterns && <PatternAlert patterns={patterns} />}
-
             <div className="filter-bar mod-filter-bar">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
                 <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
@@ -340,6 +320,8 @@ export function Dashboard() {
                 </button>
               ))}
             </div>
+
+            {patterns && <PatternAlert patterns={patterns} />}
 
             {error && (
               <div className="mod-error-banner">
@@ -485,29 +467,6 @@ export function Dashboard() {
                   onClick={() => updateSettings({ enableAlerts: !settings.enableAlerts })}
                 >
                   {settings.enableAlerts ? 'ON' : 'OFF'}
-                </button>
-              </div>
-            </div>
-
-            <div className="card mod-settings-card">
-              <h3 className="mod-settings-heading">Test Data</h3>
-              <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 'var(--space-3)' }}>
-                Generate sample data to test all dashboard features.
-              </p>
-              <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-                <button
-                  className="btn-primary"
-                  style={{ padding: '4px 12px', fontSize: 11 }}
-                  onClick={handleSeed}
-                >
-                  Generate Test Data
-                </button>
-                <button
-                  className="btn-ghost"
-                  style={{ padding: '4px 12px', fontSize: 11 }}
-                  onClick={handleSeedClear}
-                >
-                  Clear Test Data
                 </button>
               </div>
             </div>

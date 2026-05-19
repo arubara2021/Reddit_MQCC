@@ -381,6 +381,7 @@ select {
   background: var(--bg-base);
   border-bottom: 1px solid var(--border-subtle);
   box-shadow: 0 1px 0 rgba(79, 143, 247, 0.06);
+  overflow: hidden;
 }
 
 .mod-container {
@@ -464,6 +465,7 @@ select {
 
 .mod-filter-bar {
   margin-bottom: var(--space-3);
+  padding-top: var(--space-2);
 }
 
 .mod-error-banner {

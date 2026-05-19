@@ -1,5 +1,3 @@
-// FILE 8: src/server/core/constants.ts
-
 export const REDIS_KEYS = {
   QUEUE_SNAPSHOT: 'mqcc:queue:',
   USER_CONTEXT: 'mqcc:u2:',

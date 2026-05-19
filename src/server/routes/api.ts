@@ -1,5 +1,3 @@
-// FILE 9: src/server/routes/api.ts
-
 import { Hono } from 'hono';
 import { context } from '@devvit/web/server';
 import { log } from '../core/logger';
@@ -21,7 +19,6 @@ import {
   removeAndBan,
   getDurationOptions,
 } from '../core/modActions';
-import { seed } from './seed';
 import { deleteCached } from '../core/cache';
 import { REDIS_KEYS } from '../core/constants';
 import { checkPermissions } from '../core/permissions';
@@ -43,7 +40,6 @@ import type {
 const api = new Hono();
 
 api.route('/community', community);
-api.route('/seed', seed);
 
 const EMPTY_PERMISSIONS: ModPermissions = {
   canRemove: false,
