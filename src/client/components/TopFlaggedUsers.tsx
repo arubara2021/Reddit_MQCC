@@ -1,5 +1,7 @@
 // src/client/components/TopFlaggedUsers.tsx
+
 import { memo } from 'react';
+import { timeAgo } from '../utils/time';
 
 interface FlaggedUser {
   username: string;
@@ -9,16 +11,6 @@ interface FlaggedUser {
 
 interface TopFlaggedUsersProps {
   users: FlaggedUser[];
-}
-
-function timeAgo(ts: number): string {
-  const s = Math.floor((Date.now() - ts) / 1000);
-  if (s < 60) return s + 's ago';
-  const m = Math.floor(s / 60);
-  if (m < 60) return m + 'm ago';
-  const h = Math.floor(m / 60);
-  if (h < 24) return h + 'h ago';
-  return Math.floor(h / 24) + 'd ago';
 }
 
 export const TopFlaggedUsers = memo(function TopFlaggedUsers({
@@ -51,7 +43,6 @@ export const TopFlaggedUsers = memo(function TopFlaggedUsers({
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-        {/* Table header - hide on mobile */}
         <div
           className="hide-mobile"
           style={{
@@ -71,7 +62,6 @@ export const TopFlaggedUsers = memo(function TopFlaggedUsers({
           <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.06em', textTransform: 'uppercase', textAlign: 'right' }}>Last</span>
         </div>
 
-        {/* Rows */}
         {users.map((user, idx) => {
           const barWidth = maxCount > 0 ? Math.round((user.actionCount / maxCount) * 100) : 0;
 
@@ -101,7 +91,6 @@ export const TopFlaggedUsers = memo(function TopFlaggedUsers({
                 gap: 'var(--space-2)',
               }}
             >
-              {/* Background bar */}
               <div
                 style={{
                   position: 'absolute',
@@ -117,7 +106,6 @@ export const TopFlaggedUsers = memo(function TopFlaggedUsers({
                 }}
               />
 
-              {/* Left: rank + username */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', position: 'relative', zIndex: 1, minWidth: 0, flex: 1 }}>
                 <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', textAlign: 'center', width: 16, flexShrink: 0 }}>
                   {idx + 1}
@@ -127,7 +115,6 @@ export const TopFlaggedUsers = memo(function TopFlaggedUsers({
                 </span>
               </div>
 
-              {/* Right: count + last action */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', position: 'relative', zIndex: 1, flexShrink: 0 }}>
                 <span className="hide-mobile" style={{ fontSize: 10, color: 'var(--text-muted)' }}>
                   {timeAgo(new Date(user.lastAction).getTime())}
@@ -152,7 +139,6 @@ export const TopFlaggedUsers = memo(function TopFlaggedUsers({
         })}
       </div>
 
-      {/* Summary */}
       <div
         style={{
           marginTop: 'var(--space-3)',

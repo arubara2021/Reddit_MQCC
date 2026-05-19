@@ -1,4 +1,7 @@
+// src/client/components/PublicDashboard.tsx
+
 import { useState, useEffect, useRef } from 'react';
+import { timeAgo } from '../utils/time';
 
 type LeaderboardEntry = {
   name: string;
@@ -51,18 +54,6 @@ function AnimatedNumber({ value, duration = 1200 }: { value: number; duration?: 
   return <>{display.toLocaleString()}</>;
 }
 
-function timeAgo(ts: number): string {
-  const diff = Date.now() - ts;
-  if (diff < 0) return 'now';
-  const seconds = Math.floor(diff / 1000);
-  if (seconds < 60) return seconds + 's ago';
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return minutes + 'm ago';
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return hours + 'h ago';
-  return Math.floor(hours / 24) + 'd ago';
-}
-
 function getHealthColor(health: number): string {
   if (health >= 85) return 'var(--pub-success)';
   if (health >= 65) return 'var(--pub-accent-bright)';
@@ -107,12 +98,10 @@ export function PublicDashboard({ subredditName }: { subredditName: string }) {
     setError(null);
 
     try {
-      // Get current user identity
       const initRes = await fetch('/api/init').then((r) => r.json()).catch(() => null);
       const username = initRes?.username || null;
       setViewerName(username);
 
-      // Fetch real community data from the public endpoint
       const communityRes = await fetch('/api/community?subreddit=' + encodeURIComponent(subredditName));
       const communityData = await communityRes.json();
 
@@ -122,14 +111,12 @@ export function PublicDashboard({ subredditName }: { subredditName: string }) {
 
       const data = communityData.data;
 
-      // Set stats
       setHeroStats({
         active: data.stats?.active || 0,
         posts: data.stats?.posts || 0,
         health: data.stats?.health || 0,
       });
 
-      // Set leaderboards
       const contributors = data.contributors || [];
       const commenters = data.commenters || [];
       const karma = data.karma || [];
@@ -140,7 +127,6 @@ export function PublicDashboard({ subredditName }: { subredditName: string }) {
         karma,
       });
 
-      // Calculate viewer rank and score for each tab
       if (username) {
         const findRankAndScore = (list: LeaderboardEntry[]): { rank: number; score: number } => {
           const idx = list.findIndex((e) => e.name.toLowerCase() === username.toLowerCase());
@@ -156,7 +142,6 @@ export function PublicDashboard({ subredditName }: { subredditName: string }) {
         setViewerScore({ contributors: c.score, comments: cm.score, karma: k.score });
       }
 
-      // Set recent activity
       setRecentActivity(data.recentActivity || []);
     } catch (e) {
       console.error('[PublicDashboard] Load failed:', e);
@@ -170,7 +155,6 @@ export function PublicDashboard({ subredditName }: { subredditName: string }) {
     loadData();
   }, [subredditName]);
 
-  // Close dropdown on outside click
   useEffect(() => {
     if (!showDropdown) return;
     const close = () => setShowDropdown(false);
@@ -189,7 +173,6 @@ export function PublicDashboard({ subredditName }: { subredditName: string }) {
     return count + ' users';
   };
 
-  // Loading state
   if (loading) {
     return (
       <div className="public-root" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -201,7 +184,6 @@ export function PublicDashboard({ subredditName }: { subredditName: string }) {
     );
   }
 
-  // Error state
   if (error && heroStats.posts === 0) {
     return (
       <div className="public-root">
@@ -240,7 +222,6 @@ export function PublicDashboard({ subredditName }: { subredditName: string }) {
     <div className="public-root">
       <div className="public-container">
 
-        {/* Hero Card */}
         <div className="public-hero animate-fade-in">
           <div className="public-hero-inner">
             <div className="public-hero-label">Community Pulse</div>
@@ -289,7 +270,6 @@ export function PublicDashboard({ subredditName }: { subredditName: string }) {
           </div>
         </div>
 
-        {/* Tab Switcher */}
         <div className="public-tabs">
           {TABS.map((tab) => {
             const isActive = activeTab === tab.id;
@@ -318,7 +298,6 @@ export function PublicDashboard({ subredditName }: { subredditName: string }) {
           })}
         </div>
 
-        {/* Toolbar */}
         <div className="public-toolbar">
           <div className="public-toolbar-count">{getTabCountLabel()}</div>
 
@@ -358,7 +337,6 @@ export function PublicDashboard({ subredditName }: { subredditName: string }) {
           </div>
         </div>
 
-        {/* Leaderboard */}
         {currentList.length === 0 ? (
           <div className="public-list-empty animate-fade-in">
             <svg
@@ -421,7 +399,6 @@ export function PublicDashboard({ subredditName }: { subredditName: string }) {
           </div>
         )}
 
-        {/* Viewer's Rank */}
         {viewerName && viewerRank[activeTab] > 0 && (
           <div className="public-your-rank animate-fade-in">
             <div className="public-your-rank-left">
@@ -448,7 +425,6 @@ export function PublicDashboard({ subredditName }: { subredditName: string }) {
           </div>
         )}
 
-        {/* Recent Activity */}
         {recentActivity.length > 0 && (
           <div className="animate-fade-in" style={{ marginTop: 8 }}>
             <div className="public-activity-header">
@@ -475,7 +451,6 @@ export function PublicDashboard({ subredditName }: { subredditName: string }) {
           </div>
         )}
 
-        {/* Footer */}
         <div className="public-footer">
           <div className="public-footer-icon">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">

@@ -1,8 +1,9 @@
-import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
-import tailwind from '@tailwindcss/vite';
-import { devvit } from '@devvit/start/vite';
+// vitest.config.ts
+
+import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
-  plugins: [react(), tailwind(), devvit()],
+  test: {
+    include: ['src/**/*.test.ts'],
+  },
 });
