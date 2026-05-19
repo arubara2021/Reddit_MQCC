@@ -10,7 +10,9 @@
 A real-time moderation dashboard for Reddit built on the Devvit platform. MQCC replaces the native flat mod queue with a priority-scored, context-enriched interface that detects coordinated spam patterns, surfaces anomaly alerts, and exposes bulk action workflows — all within a single installable Devvit app.
 
 ---
+## Demo
 
+[![MQCC Demo Video](https://img.shields.io/badge/Watch_Demo-FF0000?style=for-the-badge&logo=youtube&logoColor=white)](https://youtu.be/_-0PLfCFPYo)
 ## Table of Contents
 
 - [The Problem](#the-problem)
