@@ -77,11 +77,11 @@ export const QueueItem = memo(function QueueItem({
             <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', textTransform: 'uppercase' }}>
               {item.type === 'post' ? 'POST' : 'COMMENT'}
             </span>
-            <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>·</span>
+            <span style={{ fontSize: 10, color: 'var(--border-strong)' }}>|</span>
             <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>
               u/{item.authorName}
             </span>
-            <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>·</span>
+            <span style={{ fontSize: 10, color: 'var(--border-strong)' }}>|</span>
             <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
               {item.reportCount}r
             </span>

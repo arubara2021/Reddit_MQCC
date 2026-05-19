@@ -1,3 +1,5 @@
+// FILE 9: src/server/routes/api.ts
+
 import { Hono } from 'hono';
 import { context } from '@devvit/web/server';
 import { log } from '../core/logger';
@@ -42,7 +44,6 @@ const api = new Hono();
 
 api.route('/community', community);
 api.route('/seed', seed);
-
 
 const EMPTY_PERMISSIONS: ModPermissions = {
   canRemove: false,
@@ -343,23 +344,6 @@ api.post('/settings/reset', async (c) => {
       error: e instanceof Error ? e.message : String(e),
     });
     return c.json({ settings: EMPTY_SETTINGS });
-  }
-});
-
-api.get('/community-stats', async (c) => {
-  try {
-    return c.json({
-      stats: {
-        totalPosts: 0,
-        totalComments: 0,
-        activeUsers: 0,
-        actionsThisWeek: 0,
-        topContributors: [],
-        recentActivity: [],
-      },
-    });
-  } catch (e) {
-    return c.json({ stats: null });
   }
 });
 

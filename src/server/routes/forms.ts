@@ -1,12 +1,11 @@
-// src/server/routes/forms.ts
+// FILE 10: src/server/routes/forms.ts
+
 import { Hono } from 'hono';
-import { context } from '@devvit/web/server';
 import { log } from '../core/logger';
 import { banUser, removeAndBan, getDurationOptions } from '../core/modActions';
 
 const forms = new Hono();
 
-// ---- Single Ban Form ----
 forms.post('/ban-user', async (c) => {
   try {
     const body = await c.req.json();
@@ -44,7 +43,6 @@ forms.post('/ban-user', async (c) => {
   }
 });
 
-// ---- Bulk Ban Form ----
 forms.post('/bulk-ban', async (c) => {
   try {
     const body = await c.req.json();
@@ -104,7 +102,6 @@ forms.post('/bulk-ban', async (c) => {
   }
 });
 
-// ---- Remove + Ban Form ----
 forms.post('/remove-and-ban', async (c) => {
   try {
     const body = await c.req.json();
@@ -143,34 +140,6 @@ forms.post('/remove-and-ban', async (c) => {
   }
 });
 
-// ---- Warn User Form ----
-forms.post('/warn-user', async (c) => {
-  try {
-    const body = await c.req.json();
-    const { username, message: warnMessage } = body;
-
-    if (!username) {
-      return c.json({ message: 'Missing username' }, 400);
-    }
-
-    log('forms', 'info', 'Warning recorded', {
-      username,
-      message: warnMessage,
-    });
-
-    return c.json({
-      success: true,
-      message: 'Warning recorded for u/' + username,
-    });
-  } catch (e) {
-    log('forms', 'error', 'Warn user form failed', {
-      error: e instanceof Error ? e.message : String(e),
-    });
-    return c.json({ message: 'Warn failed' }, 500);
-  }
-});
-
-// ---- Ban Duration Options ----
 forms.get('/ban-durations', async (c) => {
   try {
     return c.json({ durations: getDurationOptions() });

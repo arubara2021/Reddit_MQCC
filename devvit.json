@@ -32,7 +32,6 @@
   "forms": {
     "banUser": "/internal/form/ban-user",
     "bulkBan": "/internal/form/bulk-ban",
-    "warnUser": "/internal/form/warn-user",
     "removeAndBan": "/internal/form/remove-and-ban"
   },
   "triggers": {

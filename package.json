@@ -2,7 +2,18 @@
   "private": true,
   "name": "queuezero",
   "version": "0.0.1",
-  "license": "BSD-3-Clause",
+  "description": "Real-time Reddit moderation dashboard with priority scoring, pattern detection, anomaly alerts, and bulk actions. Built on Devvit.",
+  "keywords": [
+    "reddit",
+    "moderation",
+    "mod-tools",
+    "devvit",
+    "queue",
+    "dashboard",
+    "spam-detection",
+    "bulk-actions"
+  ],
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "build": "vite build",

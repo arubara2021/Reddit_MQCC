@@ -1,3 +1,5 @@
+// FILE 8: src/server/core/constants.ts
+
 export const REDIS_KEYS = {
   QUEUE_SNAPSHOT: 'mqcc:queue:',
   USER_CONTEXT: 'mqcc:u2:',
@@ -5,7 +7,6 @@ export const REDIS_KEYS = {
   QUEUE_APPEARANCES: 'mqcc:appear:',
   ANOMALIES: 'mqcc:anomalies:',
   SETTINGS: 'mqcc:settings:',
-  MOD_NOTES: 'mqcc:modnotes:',
   WORKLOAD: 'mqcc:workload:',
   RATE_LIMIT: 'mqcc:ratelimit:',
   ALERT_STATE: 'mqcc:alertstate:',
@@ -20,7 +21,6 @@ export const TTL = {
   ANOMALIES_MS: 15 * 60 * 1000,
   SETTINGS_MS: 24 * 60 * 60 * 1000,
   APPEARANCES_MS: 7 * 24 * 60 * 60 * 1000,
-  MOD_NOTES_MS: 90 * 24 * 60 * 60 * 1000,
   ALERT_COOLDOWN_MS: 30 * 60 * 1000,
   STORED_MODS_MS: 365 * 24 * 60 * 60 * 1000,
 } as const;

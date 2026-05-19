@@ -1,3 +1,5 @@
+// FILE 7: src/shared/api.ts
+
 export interface RawQueueItem {
   id: string;
   fullname: string;
@@ -126,14 +128,6 @@ export interface InitResponse {
   subredditId: string;
   isMod: boolean;
   verified: boolean;
-}
-
-export interface ModNote {
-  id: string;
-  username: string;
-  note: string;
-  modName: string;
-  createdAt: number;
 }
 
 export interface AppSettings {
