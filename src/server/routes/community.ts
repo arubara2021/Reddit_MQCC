@@ -1,346 +1,208 @@
 import { Hono } from 'hono';
-import { reddit, redis, context } from '@devvit/web/server';
+import { context } from '@devvit/web/server';
 import { log } from '../core/logger';
-import { REDIS_KEYS } from '../core/constants';
-import { getCached } from '../core/cache';
-import type { ModActionRecord } from '../../shared/api';
+import { getLeaderboard, recordPost, isSeeded, markSeeded } from '../core/leaderboardTracker';
+import { fetchModQueue } from '../core/queueFetcher';
 
 const community = new Hono();
 
-const EMPTY_DATA = {
-  success: true,
-  data: {
-    stats: { active: 0, posts: 0, health: 0 },
-    contributors: [] as Array<{ name: string; score: number }>,
-    commenters: [] as Array<{ name: string; score: number }>,
-    karma: [] as Array<{ name: string; score: number }>,
-    recentActivity: [] as Array<{ action: string; author: string; time: number }>,
-  },
+type Entry = { name: string; score: number };
+
+type CommunityData = {
+  stats: { active: number; posts: number; health: number };
+  contributors: Entry[];
+  commenters: Entry[];
+  karma: Entry[];
+  trendingPosts: Array<{
+    title: string;
+    permalink: string;
+    author: string;
+    numComments: number;
+    createdAt: number;
+    subreddit: string;
+  }>;
+  recentActivity: Array<{ action: string; author: string; time: number }>;
 };
 
-function sortAndSlice(m: Map<string, number>) {
+const EMPTY: CommunityData = {
+  stats: { active: 0, posts: 0, health: 0 },
+  contributors: [],
+  commenters: [],
+  karma: [],
+  trendingPosts: [],
+  recentActivity: [],
+};
+
+function sortSlice(m: Map<string, number>): Entry[] {
   return [...m.entries()]
     .map(([name, score]) => ({ name, score }))
     .sort((a, b) => b.score - a.score)
     .slice(0, 20);
 }
 
-async function tryFetchPublicPosts(subredditName: string): Promise<any[]> {
-  const methods = [
-    { name: 'getHotPosts', fn: (reddit as any).getHotPosts },
-    { name: 'getNewPosts', fn: (reddit as any).getNewPosts },
-    { name: 'getTopPosts', fn: (reddit as any).getTopPosts },
-  ];
+function hasData(d: CommunityData): boolean {
+  return (
+    d.contributors.length > 0 ||
+    d.commenters.length > 0 ||
+    d.karma.length > 0 ||
+    d.recentActivity.length > 0
+  );
+}
 
-  for (const method of methods) {
-    if (typeof method.fn !== 'function') continue;
+function buildFromQueueItems(
+  items: Array<{
+    id: string;
+    authorName: string;
+    type: 'post' | 'comment';
+    title: string;
+    body: string;
+    createdAt: number;
+    permalink: string;
+  }>,
+  sub: string
+): CommunityData {
+  const seen = new Set<string>();
+  const unique: typeof items = [];
 
-    try {
-      const listing = method.fn.call(reddit, {
-        subreddit: subredditName,
-        limit: 100,
-      });
-
-      if (listing && typeof listing[Symbol.asyncIterator] === 'function') {
-        const collected: any[] = [];
-        for await (const post of listing) {
-          collected.push(post);
-          if (collected.length >= 100) break;
-        }
-        if (collected.length > 0) {
-          log('community', 'info', 'Fetched posts via ' + method.name, {
-            count: collected.length,
-          });
-          return collected;
-        }
-      }
-    } catch (e) {
-      log('community', 'warn', method.name + ' failed', {
-        error: e instanceof Error ? e.message : String(e),
-      });
-    }
+  for (const item of items) {
+    if (!item.authorName || item.authorName === '[deleted]' || item.authorName === '[object Object]') continue;
+    if (seen.has(item.id)) continue;
+    seen.add(item.id);
+    unique.push(item);
   }
 
-  return [];
-}
+  if (unique.length === 0) return EMPTY;
 
-function extractTimestamp(raw: Record<string, unknown>): number {
-  if (typeof raw.createdAt === 'number') return raw.createdAt;
-  if (raw.createdAt instanceof Date) return (raw.createdAt as Date).getTime();
-  if (typeof raw.created_utc === 'number') return (raw.created_utc as number) * 1000;
-  return 0;
-}
-
-function extractAuthor(raw: Record<string, unknown>): string {
-  if (typeof raw.authorName === 'string' && raw.authorName) return raw.authorName;
-  if (typeof raw.author === 'string' && raw.author) return raw.author;
-  return '';
-}
-
-function extractScore(raw: Record<string, unknown>): number {
-  if (typeof raw.score === 'number') return raw.score;
-  if (typeof (raw as any).upvotes === 'number') return (raw as any).upvotes;
-  return 0;
-}
-
-function extractNumComments(raw: Record<string, unknown>): number {
-  if (typeof raw.numComments === 'number') return raw.numComments;
-  if (typeof raw.num_comments === 'number') return raw.num_comments;
-  if (typeof raw.numberOfComments === 'number') return raw.numberOfComments;
-  return 0;
-}
-
-function buildDataFromPosts(posts: any[]) {
   const postsByAuthor = new Map<string, number>();
-  const karmaByAuthor = new Map<string, number>();
   const commentsByAuthor = new Map<string, number>();
   const activeAuthors = new Set<string>();
 
-  for (const post of posts) {
-    const raw = post as Record<string, unknown>;
-    const author = extractAuthor(raw);
-    if (!author || author === '[deleted]') continue;
-
-    activeAuthors.add(author);
-    postsByAuthor.set(author, (postsByAuthor.get(author) || 0) + 1);
-
-    const score = extractScore(raw);
-    const bestKarma = karmaByAuthor.get(author) || 0;
-    if (score > bestKarma) karmaByAuthor.set(author, score);
-
-    const numComments = extractNumComments(raw);
-    if (numComments > 0) {
-      commentsByAuthor.set(author, (commentsByAuthor.get(author) || 0) + numComments);
-    }
+  for (const item of unique) {
+    const a = item.authorName.toLowerCase();
+    activeAuthors.add(a);
+    postsByAuthor.set(a, (postsByAuthor.get(a) || 0) + 1);
+    commentsByAuthor.set(a, (commentsByAuthor.get(a) || 0) + 1);
   }
 
-  const recentActivity = posts
-    .slice()
-    .sort((a, b) => {
-      return extractTimestamp(b as Record<string, unknown>) - extractTimestamp(a as Record<string, unknown>);
-    })
-    .slice(0, 5)
-    .map((p) => {
-      const raw = p as Record<string, unknown>;
-      return {
-        action: 'post',
-        author: extractAuthor(raw) || 'unknown',
-        time: extractTimestamp(raw) || Date.now(),
-      };
-    });
+  const sorted = [...unique].sort((a, b) => b.createdAt - a.createdAt);
 
-  const postCount = posts.length;
-  const health =
-    postCount >= 50 ? 95 :
-    postCount >= 20 ? 85 :
-    postCount >= 10 ? 70 :
-    postCount >= 5 ? 55 :
-    30;
+  const recentActivity = sorted.slice(0, 5).map((r) => ({
+    action: r.type || 'post',
+    author: r.authorName,
+    time: r.createdAt || Date.now(),
+  }));
+
+  const trendingPosts = sorted
+    .filter((r) => r.title || r.body)
+    .slice(0, 5)
+    .map((r) => ({
+      title: r.title || r.body?.substring(0, 80) || 'Untitled',
+      permalink: r.permalink || '',
+      author: r.authorName,
+      numComments: 0,
+      createdAt: r.createdAt,
+      subreddit: sub,
+    }));
+
+  const n = unique.length;
+  const health = n >= 50 ? 95 : n >= 20 ? 85 : n >= 10 ? 70 : n >= 5 ? 55 : 30;
 
   return {
-    success: true,
-    data: {
-      stats: {
-        active: activeAuthors.size,
-        posts: postCount,
-        health,
-      },
-      contributors: sortAndSlice(postsByAuthor),
-      commenters: sortAndSlice(commentsByAuthor),
-      karma: sortAndSlice(karmaByAuthor),
-      recentActivity,
-    },
+    stats: { active: activeAuthors.size, posts: n, health },
+    contributors: sortSlice(postsByAuthor),
+    commenters: sortSlice(commentsByAuthor),
+    karma: sortSlice(postsByAuthor),
+    trendingPosts,
+    recentActivity,
   };
 }
 
-async function buildFromStoredActions(): Promise<{
-  success: boolean;
-  data: any;
-} | null> {
+async function seedFromQueue(): Promise<void> {
   try {
-    const actionsKey = REDIS_KEYS.MOD_ACTIONS + context.subredditId;
-    const raw = await redis.get(actionsKey);
-    if (!raw) return null;
+    const raw = await fetchModQueue();
+    if (raw.length === 0) return;
 
-    const actions: ModActionRecord[] = JSON.parse(raw as string);
-    if (actions.length === 0) return null;
-
-    const contributors = new Map<string, number>();
-    const commenters = new Map<string, number>();
-    const karma = new Map<string, number>();
-    const activeAuthors = new Set<string>();
-    const recentActivity: Array<{ action: string; author: string; time: number }> = [];
-
-    for (const action of actions) {
-      if (!action.targetAuthor || action.targetAuthor === '[deleted]') continue;
-
-      const author = action.targetAuthor;
-      activeAuthors.add(author);
-
-      if (action.action === 'approve') {
-        contributors.set(author, (contributors.get(author) || 0) + 1);
-      }
-
-      commenters.set(author, (commenters.get(author) || 0) + 1);
-      karma.set(author, (karma.get(author) || 0) + 1);
+    for (const item of raw) {
+      if (!item.authorName || item.authorName === '[deleted]' || item.authorName === '[object Object]') continue;
+      await recordPost(
+        item.id,
+        item.authorName,
+        item.title || item.body?.substring(0, 80) || '',
+        item.permalink || '',
+        item.createdAt || Date.now()
+      );
     }
 
-    const sortedByTime = [...actions]
-      .filter((a) => a.targetAuthor && a.targetAuthor !== '[deleted]')
-      .sort((a, b) => b.timestamp - a.timestamp)
-      .slice(0, 5);
-
-    for (const action of sortedByTime) {
-      recentActivity.push({
-        action: action.action,
-        author: action.targetAuthor,
-        time: action.timestamp,
-      });
-    }
-
-    const totalAuthors = activeAuthors.size;
-    const health =
-      totalAuthors >= 10 ? 85 :
-      totalAuthors >= 5 ? 70 :
-      totalAuthors >= 2 ? 55 :
-      30;
-
-    log('community', 'info', 'Built from stored mod actions', {
-      authors: totalAuthors,
-      actions: actions.length,
-    });
-
-    return {
-      success: true,
-      data: {
-        stats: {
-          active: totalAuthors,
-          posts: totalAuthors,
-          health,
-        },
-        contributors: sortAndSlice(contributors),
-        commenters: sortAndSlice(commenters),
-        karma: sortAndSlice(karma),
-        recentActivity,
-      },
-    };
+    await markSeeded();
+    log('community', 'info', 'Leaderboard seeded and marked', { count: raw.length });
   } catch (e) {
-    log('community', 'warn', 'Failed to build from stored actions', {
+    log('community', 'warn', 'Seed from queue failed', {
       error: e instanceof Error ? e.message : String(e),
     });
-    return null;
-  }
-}
-
-async function buildFromQueueCache(): Promise<{
-  success: boolean;
-  data: any;
-} | null> {
-  try {
-    const cacheKey = REDIS_KEYS.QUEUE_SNAPSHOT + context.subredditId;
-    const cached = await getCached<any>(cacheKey, null);
-    if (!cached || !cached.items || cached.items.length === 0) return null;
-
-    const items = cached.items as Array<{
-      authorName: string;
-      type: string;
-      reportCount: number;
-      createdAt: number;
-    }>;
-
-    const contributors = new Map<string, number>();
-    const commenters = new Map<string, number>();
-    const karma = new Map<string, number>();
-    const activeAuthors = new Set<string>();
-    const recentActivity: Array<{ action: string; author: string; time: number }> = [];
-
-    for (const item of items) {
-      const author = item.authorName;
-      if (!author || author === '[deleted]') continue;
-
-      activeAuthors.add(author);
-      contributors.set(author, (contributors.get(author) || 0) + 1);
-      commenters.set(author, (commenters.get(author) || 0) + 1);
-      karma.set(author, (karma.get(author) || 0) + item.reportCount);
-
-      recentActivity.push({
-        action: item.type,
-        author,
-        time: item.createdAt,
-      });
-    }
-
-    recentActivity.sort((a, b) => b.time - a.time);
-    const trimmed = recentActivity.slice(0, 5);
-
-    const totalAuthors = activeAuthors.size;
-    const health =
-      totalAuthors >= 10 ? 85 :
-      totalAuthors >= 5 ? 70 :
-      totalAuthors >= 2 ? 55 :
-      30;
-
-    log('community', 'info', 'Built from queue cache', {
-      authors: totalAuthors,
-      items: items.length,
-    });
-
-    return {
-      success: true,
-      data: {
-        stats: {
-          active: totalAuthors,
-          posts: totalAuthors,
-          health,
-        },
-        contributors: sortAndSlice(contributors),
-        commenters: sortAndSlice(commenters),
-        karma: sortAndSlice(karma),
-        recentActivity: trimmed,
-      },
-    };
-  } catch (e) {
-    log('community', 'warn', 'Failed to build from queue cache', {
-      error: e instanceof Error ? e.message : String(e),
-    });
-    return null;
   }
 }
 
 community.get('/', async (c) => {
   try {
-    const subredditName =
-      c.req.query('subreddit') || context.subredditName || '';
+    const sub = c.req.query('subreddit') || context.subredditName || '';
+    if (!sub) return c.json({ success: false, error: 'Missing subreddit name' });
 
-    if (!subredditName) {
-      return c.json({ success: false, error: 'Missing subreddit name' });
+    log('community', 'info', 'Fetching community data', { subredditName: sub });
+
+    const seeded = await isSeeded();
+
+    if (!seeded) {
+      log('community', 'info', 'First visit, seeding leaderboard from queue');
+      await seedFromQueue();
     }
 
-    log('community', 'info', 'Fetching community data', { subredditName });
+    const data = await getLeaderboard(sub);
 
-    const posts = await tryFetchPublicPosts(subredditName);
-
-    if (posts.length > 0) {
-      return c.json(buildDataFromPosts(posts));
+    if (hasData(data)) {
+      log('community', 'info', 'Returning leaderboard data', {
+        contributors: data.contributors.length,
+        recentActivity: data.recentActivity.length,
+      });
+      return c.json({ success: true, data });
     }
 
-    log('community', 'info', 'Public posts empty, trying stored data', {
-      subredditName,
-    });
+    if (!seeded) {
+      log('community', 'info', 'Seed produced no data, building direct fallback');
+      try {
+        const raw = await fetchModQueue();
+        if (raw.length > 0) {
+          const queueItems = raw.map((item) => ({
+            id: item.id,
+            authorName: item.authorName,
+            type: item.type,
+            title: item.title,
+            body: item.body,
+            createdAt: item.createdAt,
+            permalink: item.permalink,
+          }));
+          const fallback = buildFromQueueItems(queueItems, sub);
+          if (hasData(fallback)) {
+            await markSeeded();
+            log('community', 'info', 'Returning direct queue fallback', {
+              contributors: fallback.contributors.length,
+            });
+            return c.json({ success: true, data: fallback });
+          }
+        }
+      } catch (e) {
+        log('community', 'warn', 'Direct fallback failed', {
+          error: e instanceof Error ? e.message : String(e),
+        });
+      }
+    }
 
-    const fromActions = await buildFromStoredActions();
-    if (fromActions) return c.json(fromActions);
-
-    const fromQueue = await buildFromQueueCache();
-    if (fromQueue) return c.json(fromQueue);
-
-    log('community', 'info', 'No data available yet', { subredditName });
-    return c.json(EMPTY_DATA);
-  } catch (error) {
+    log('community', 'info', 'No data available', { subredditName: sub });
+    return c.json({ success: true, data: EMPTY });
+  } catch (e) {
     log('community', 'error', 'Fatal error', {
-      error: error instanceof Error ? error.message : String(error),
+      error: e instanceof Error ? e.message : String(e),
     });
-    return c.json(EMPTY_DATA);
+    return c.json({ success: true, data: EMPTY });
   }
 });
 

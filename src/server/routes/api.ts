@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { context } from '@devvit/web/server';
+import { context, redis } from '@devvit/web/server';
 import { log } from '../core/logger';
 import { community } from './community';
 import { fetchModQueue } from '../core/queueFetcher';
@@ -186,10 +186,34 @@ api.get('/queue', async (c) => {
 
     enriched.sort((a, b) => b.priority.score - a.priority.score);
 
+    let anomalies: Awaited<ReturnType<typeof detectAnomalies>> = [];
+    try {
+      anomalies = await detectAnomalies(enriched);
+    } catch (anomalyErr) {
+      log('api', 'warn', 'detectAnomalies failed in queue', {
+        error: anomalyErr instanceof Error ? anomalyErr.message : String(anomalyErr),
+      });
+    }
+
+    let patterns: ReturnType<typeof detectPatterns> = {
+      linkClusters: [],
+      timeBursts: [],
+      usernamePatterns: [],
+    };
+    try {
+      patterns = detectPatterns(enriched);
+    } catch (patternErr) {
+      log('api', 'warn', 'detectPatterns failed in queue', {
+        error: patternErr instanceof Error ? patternErr.message : String(patternErr),
+      });
+    }
+
     return c.json({
       items: enriched,
       groups: [],
       lastUpdated: Date.now(),
+      anomalies,
+      patterns,
     });
   } catch (e) {
     log('api', 'error', 'Queue fetch failed', {
@@ -199,6 +223,8 @@ api.get('/queue', async (c) => {
       items: [],
       groups: [],
       lastUpdated: Date.now(),
+      anomalies: [],
+      patterns: { linkClusters: [], timeBursts: [], usernamePatterns: [] },
     });
   }
 });
@@ -348,6 +374,57 @@ api.get('/ban-durations', async (c) => {
     return c.json({ durations: getDurationOptions() });
   } catch (e) {
     return c.json({ durations: [] });
+  }
+});
+
+api.post('/cleanup', async (c) => {
+  try {
+    const subredditId = context.subredditId;
+    if (!subredditId) {
+      return c.json({ success: false, message: 'No subreddit context' });
+    }
+
+    const keysToClear = [
+      REDIS_KEYS.QUEUE_SNAPSHOT + subredditId,
+      REDIS_KEYS.WORKLOAD + subredditId,
+      REDIS_KEYS.ALERT_STATE + subredditId,
+      REDIS_KEYS.ANOMALIES + subredditId,
+      REDIS_KEYS.MOD_ACTIONS + subredditId,
+      REDIS_KEYS.SETTINGS + subredditId,
+      REDIS_KEYS.STORED_MODS + subredditId,
+      REDIS_KEYS.SETUP_COMPLETE + subredditId,
+      REDIS_KEYS.LEADERBOARD + subredditId,
+      REDIS_KEYS.LEADERBOARD + 'seeded:' + subredditId,
+    ];
+
+    let cleared = 0;
+    for (const key of keysToClear) {
+      try {
+        await deleteCached(key);
+        cleared++;
+      } catch (delErr) {
+        log('api', 'warn', 'Failed to clear key', {
+          key,
+          error: delErr instanceof Error ? delErr.message : String(delErr),
+        });
+      }
+    }
+
+    log('api', 'info', 'Full cleanup complete', {
+      subredditId,
+      cleared,
+      total: keysToClear.length,
+    });
+
+    return c.json({
+      success: true,
+      message: 'Cleared ' + cleared + ' cache keys including all historical data and leaderboard',
+    });
+  } catch (e) {
+    log('api', 'error', 'Cleanup failed', {
+      error: e instanceof Error ? e.message : String(e),
+    });
+    return c.json({ success: false, message: 'Cleanup failed' });
   }
 });
 

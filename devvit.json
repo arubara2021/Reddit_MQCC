@@ -35,7 +35,11 @@
     "removeAndBan": "/internal/form/remove-and-ban"
   },
   "triggers": {
-    "onAppInstall": "/internal/trigger/on-install"
+    "onAppInstall": "/internal/trigger/on-install",
+    "onPostSubmit": "/internal/trigger/on-post-submit",
+    "onPostDelete": "/internal/trigger/on-post-delete",
+    "onCommentSubmit": "/internal/trigger/on-comment-submit",
+    "onCommentDelete": "/internal/trigger/on-comment-delete"
   },
   "scripts": {
     "dev": "vite build --watch",

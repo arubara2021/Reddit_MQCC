@@ -1,4 +1,3 @@
-// src/client/components/LoadingState.tsx
 import { memo } from 'react';
 
 interface LoadingStateProps {
@@ -15,15 +14,19 @@ export const LoadingState = memo(function LoadingState({
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: '48px var(--space-6)',
+        padding: '56px var(--space-6)',
         gap: 'var(--space-4)',
       }}
     >
       <div
-        className="spinner"
         style={{
-          width: 24,
-          height: 24,
+          width: 28,
+          height: 28,
+          border: '2px solid var(--border-default)',
+          borderTopColor: 'var(--accent)',
+          borderRadius: '50%',
+          animation: 'spin 0.7s linear infinite',
+          boxShadow: '0 0 12px var(--accent-glow)',
         }}
       />
       <p
@@ -31,6 +34,8 @@ export const LoadingState = memo(function LoadingState({
           fontSize: 12,
           color: 'var(--text-muted)',
           fontWeight: 500,
+          fontFamily: 'var(--font-mono)',
+          letterSpacing: '0.02em',
         }}
       >
         {message || 'Loading...'}

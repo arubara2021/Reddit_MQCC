@@ -1,4 +1,3 @@
-// src/server/core/alertSystem.ts
 import { redis, context } from '@devvit/web/server';
 import { REDIS_KEYS, TTL } from './constants';
 import { getCached, setCached } from './cache';
@@ -24,17 +23,67 @@ export async function detectAnomalies(
   checkRepeatOffenders(items, anomalies, state, now);
   checkBanEvasion(items, anomalies, state, now);
 
-  // Save updated alert state
-  await saveAlertState(state);
-
   if (anomalies.length > 0) {
+    await saveAlertState(state);
+    await persistAnomalies(anomalies);
+
     log('alertSystem', 'info', 'Anomalies detected', {
       count: anomalies.length,
       types: anomalies.map((a) => a.type).join(', '),
     });
   }
 
+  const cached = await loadPersistedAnomalies();
+  if (cached.length > 0) {
+    const existingIds = new Set(anomalies.map((a) => a.id));
+    for (const a of cached) {
+      if (!existingIds.has(a.id)) {
+        anomalies.push(a);
+      }
+    }
+  }
+
   return anomalies;
+}
+
+async function persistAnomalies(anomalies: Anomaly[]): Promise<void> {
+  try {
+    const key = REDIS_KEYS.ANOMALIES + context.subredditId;
+    const existingRaw = await redis.get(key);
+    let existing: Anomaly[] = existingRaw ? JSON.parse(existingRaw as string) : [];
+
+    const now = Date.now();
+    existing = existing.filter((a) => now - a.timestamp < TTL.ANOMALIES_MS);
+
+    const existingIds = new Set(existing.map((a) => a.id));
+    for (const a of anomalies) {
+      if (!existingIds.has(a.id)) {
+        existing.push(a);
+      }
+    }
+
+    await redis.set(key, JSON.stringify(existing), {
+      expiration: new Date(Date.now() + TTL.ANOMALIES_MS),
+    });
+  } catch (e) {
+    log('alertSystem', 'warn', 'Failed to persist anomalies', {
+      error: e instanceof Error ? e.message : String(e),
+    });
+  }
+}
+
+async function loadPersistedAnomalies(): Promise<Anomaly[]> {
+  try {
+    const key = REDIS_KEYS.ANOMALIES + context.subredditId;
+    const raw = await redis.get(key);
+    if (!raw) return [];
+
+    const anomalies: Anomaly[] = JSON.parse(raw as string);
+    const now = Date.now();
+    return anomalies.filter((a) => now - a.timestamp < TTL.ANOMALIES_MS);
+  } catch {
+    return [];
+  }
 }
 
 function checkReportSpike(
@@ -48,10 +97,9 @@ function checkReportSpike(
   const totalReports = items.reduce((sum, i) => sum + i.reportCount, 0);
   const uniqueAuthors = new Set(items.map((i) => i.authorName)).size;
 
-  // Spike = more than 15 reports from more than 3 different users
   if (totalReports > 15 && uniqueAuthors >= 3) {
     anomalies.push({
-      id: 'spike_' + now,
+      id: 'spike_' + Math.floor(now / TTL.ALERT_COOLDOWN_MS),
       type: 'spike',
       severity: totalReports > 30 ? 'critical' : 'high',
       title: 'Report spike detected',
@@ -83,7 +131,7 @@ function checkNewAccountFlood(
 
   if (newAccounts.length >= 3) {
     anomalies.push({
-      id: 'newacct_' + now,
+      id: 'newacct_' + Math.floor(now / TTL.ALERT_COOLDOWN_MS),
       type: 'new_account_flood',
       severity: newAccounts.length >= 5 ? 'critical' : 'high',
       title: 'New account flood',
@@ -110,7 +158,7 @@ function checkRepeatOffenders(
 
   if (repeatUsers.length >= 2) {
     anomalies.push({
-      id: 'repeat_' + now,
+      id: 'repeat_' + Math.floor(now / TTL.ALERT_COOLDOWN_MS),
       type: 'repeat_offender',
       severity: 'medium',
       title: 'Repeat offenders detected',
@@ -131,7 +179,6 @@ function checkBanEvasion(
 ): void {
   if (now - state.lastBanEvasionAlert < TTL.ALERT_COOLDOWN_MS) return;
 
-  // Ban evasion = previously actioned user appearing again with new account indicators
   const previouslyActioned = items.filter(
     (i) => i.userContext.previousActionCount > 0
   );
@@ -144,7 +191,7 @@ function checkBanEvasion(
 
   if (evasionSuspects.length >= 2) {
     anomalies.push({
-      id: 'evasion_' + now,
+      id: 'evasion_' + Math.floor(now / TTL.ALERT_COOLDOWN_MS),
       type: 'ban_evasion',
       severity: 'critical',
       title: 'Possible ban evasion',

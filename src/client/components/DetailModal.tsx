@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import type { EnrichedQueueItem } from '../../shared/api';
 import { ContextCard } from './ContextCard';
+import { timeAgo } from '../utils/time';
 
 interface DetailModalProps {
   item: EnrichedQueueItem;
@@ -12,8 +14,8 @@ interface DetailModalProps {
 function DetailField({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <p style={{ fontSize: 10, color: 'var(--text-muted)' }}>{label}</p>
-      <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', marginTop: 2, fontFamily: 'var(--font-mono)' }}>{value}</p>
+      <p style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 500, letterSpacing: '0.04em' }}>{label}</p>
+      <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginTop: 3, fontFamily: 'var(--font-mono)' }}>{value}</p>
     </div>
   );
 }
@@ -25,21 +27,43 @@ export function DetailModal({
   onClose,
   onAction,
 }: DetailModalProps) {
+  const [linkCopied, setLinkCopied] = useState(false);
+
   const ageText = item.userContext.accountAgeDays >= 0 ? item.userContext.accountAgeDays + ' days' : 'Unknown';
   const karmaText = item.userContext.totalKarma >= 0 ? String(item.userContext.totalKarma) : 'Unknown';
   const postKarmaText = item.userContext.postKarma >= 0 ? String(item.userContext.postKarma) : 'Unknown';
   const commentKarmaText = item.userContext.commentKarma >= 0 ? String(item.userContext.commentKarma) : 'Unknown';
 
-  const handleLinkClick = () => {
-    if (item.permalink) {
-      const url = 'https://reddit.com' + item.permalink;
+  const handleLinkClick = async () => {
+    if (!item.permalink) return;
+    const url = 'https://reddit.com' + item.permalink;
+    try {
+      await navigator.clipboard.writeText(url);
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
+    } catch {
       try {
-        window.open(url, '_blank', 'noopener');
+        const textarea = document.createElement('textarea');
+        textarea.value = url;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+        setLinkCopied(true);
+        setTimeout(() => setLinkCopied(false), 2000);
       } catch {
-        window.location.href = url;
+        // silent
       }
     }
   };
+
+  const severityColor =
+    item.priority.level === 'critical' ? 'var(--critical)' :
+    item.priority.level === 'high' ? 'var(--high)' :
+    item.priority.level === 'medium' ? 'var(--medium)' :
+    'var(--low)';
 
   return (
     <div className="overlay">
@@ -50,7 +74,7 @@ export function DetailModal({
             <span className={'badge badge-' + item.priority.level}>
               {item.priority.level === 'critical' ? '!! ' : ''}{item.priority.level.toUpperCase()}
             </span>
-            <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>Score: {item.priority.score}</span>
+            <span style={{ fontSize: 10, color: severityColor, fontFamily: 'var(--font-mono)', fontWeight: 700 }}>Score: {item.priority.score}</span>
           </div>
           <button className="btn-icon" onClick={onClose}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
@@ -62,25 +86,26 @@ export function DetailModal({
 
         <div style={{ flex: 1, overflowY: 'auto', padding: 'var(--space-4) var(--space-5)', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
           <div>
-            <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 'var(--space-2)' }}>Content</p>
-            {item.title && <p style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.4 }}>{item.title}</p>}
+            <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 'var(--space-2)' }}>Content</p>
+            {item.title && <p style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.5, fontFamily: 'var(--font-display)', letterSpacing: '-0.01em' }}>{item.title}</p>}
             {item.body && <p style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6, marginTop: item.title ? 'var(--space-1)' : 0 }}>{item.body}</p>}
             {!item.title && !item.body && <p style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>No content available</p>}
           </div>
 
           <div>
-            <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 'var(--space-2)' }}>Author</p>
+            <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 'var(--space-2)' }}>Author</p>
             <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
               <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>u/{item.authorName}</span>
               <span className="pill">{item.type}</span>
+              <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{timeAgo(item.createdAt)}</span>
             </div>
             <div style={{ marginTop: 'var(--space-2)' }}>
               <ContextCard context={item.userContext} />
             </div>
           </div>
 
-          <div style={{ background: 'var(--bg-base)', borderRadius: 'var(--radius-md)', padding: 'var(--space-4)', border: '1px solid var(--border-subtle)' }}>
-            <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 'var(--space-3)' }}>User Details</p>
+          <div style={{ background: 'var(--bg-base)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-4)', border: '1px solid var(--border-subtle)' }}>
+            <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 'var(--space-3)' }}>User Details</p>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 'var(--space-3)' }}>
               <DetailField label="Account age" value={ageText} />
               <DetailField label="Total karma" value={karmaText} />
@@ -101,7 +126,7 @@ export function DetailModal({
 
           {item.reportReasons.length > 0 && (
             <div>
-              <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 'var(--space-2)' }}>
+              <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 'var(--space-2)' }}>
                 Reports ({item.reportCount})
               </p>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-1)' }}>
@@ -114,7 +139,7 @@ export function DetailModal({
 
           {item.priority.factors.length > 0 && (
             <div>
-              <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 'var(--space-2)' }}>Priority Factors</p>
+              <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 'var(--space-2)' }}>Priority Factors</p>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-1)' }}>
                 {item.priority.factors.map((factor, idx) => (
                   <span key={idx} className="pill pill-warn">{factor}</span>
@@ -125,24 +150,42 @@ export function DetailModal({
 
           {item.permalink && (
             <div>
-              <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 'var(--space-2)' }}>Link</p>
+              <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 'var(--space-2)' }}>Link</p>
               <button
                 onClick={handleLinkClick}
                 style={{
                   fontSize: 11,
-                  color: 'var(--accent)',
-                  background: 'var(--accent-muted)',
-                  border: '1px solid var(--accent-border)',
+                  color: linkCopied ? 'var(--success)' : 'var(--accent)',
+                  background: linkCopied ? 'var(--success-bg)' : 'var(--accent-muted)',
+                  border: '1px solid ' + (linkCopied ? 'var(--success-border)' : 'var(--accent-border)'),
                   borderRadius: 'var(--radius-md)',
-                  padding: '6px 12px',
+                  padding: '8px 14px',
                   cursor: 'pointer',
                   fontFamily: 'var(--font-mono)',
                   wordBreak: 'break-all',
                   textAlign: 'left',
-                  display: 'block',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 'var(--space-2)',
+                  transition: 'all var(--duration-fast) ease',
                 }}
               >
-                reddit.com{item.permalink}
+                {linkCopied ? (
+                  <>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--success)" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                    Link copied to clipboard
+                  </>
+                ) : (
+                  <>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                      <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
+                    </svg>
+                    reddit.com{item.permalink}
+                  </>
+                )}
               </button>
             </div>
           )}
@@ -163,7 +206,7 @@ export function DetailModal({
           <select
             value={banDuration}
             onChange={(e) => onBanDurationChange(Number(e.target.value))}
-            style={{ fontSize: 11, padding: '5px 28px 5px 8px', background: 'var(--bg-base)' }}
+            style={{ fontSize: 11, padding: '6px 28px 6px 10px' }}
           >
             <option value={0}>Permanent ban</option>
             <option value={1}>1 day ban</option>

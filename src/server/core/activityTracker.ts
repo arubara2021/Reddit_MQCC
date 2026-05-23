@@ -187,7 +187,8 @@ export async function getLeaderboardData(
 
     comments[author] = (comments[author] || 0) + 1;
 
-    karma[author] = (karma[author] || 0) + (action.targetId ? 1 : 0);
+    const bestKarma = karma[author] || 0;
+    karma[author] = bestKarma + 1;
   }
 
   const sortAndSlice = (m: Record<string, number>) =>
@@ -204,6 +205,13 @@ export async function getLeaderboardData(
 
   const ttl = timeRange === 'week' ? 5 * 60 * 1000 : 15 * 60 * 1000;
   await setCached(cacheKey, leaderboard, ttl);
+
+  log('activityTracker', 'info', 'Leaderboard built', {
+    timeRange,
+    contributors: leaderboard.contributors.length,
+    commenters: leaderboard.comments.length,
+    karmaLeaders: leaderboard.karma.length,
+  });
 
   return leaderboard;
 }

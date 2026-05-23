@@ -4,18 +4,23 @@ import { setCached, getCached } from './cache';
 import { log } from './logger';
 import type { RawQueueItem, QueueSnapshot } from '../../shared/api';
 
+function toStr(val: unknown, fallback = ''): string {
+  if (typeof val === 'string') return val;
+  if (val && typeof val === 'object') {
+    const obj = val as Record<string, unknown>;
+    if (typeof obj.name === 'string') return obj.name;
+    if (typeof obj.username === 'string') return obj.username;
+    if (typeof obj.displayName === 'string') return obj.displayName;
+  }
+  return fallback;
+}
+
 function resolveFullname(item: Record<string, unknown>, isComment: boolean): string {
-  const raw = item as Record<string, unknown>;
-
-  if (typeof raw.fullname === 'string' && raw.fullname.length > 0) {
-    return raw.fullname;
+  if (typeof item.fullname === 'string' && item.fullname.length > 0) {
+    return item.fullname;
   }
-
   const id = String(item.id || '');
-  if (id.startsWith('t1_') || id.startsWith('t3_')) {
-    return id;
-  }
-
+  if (id.startsWith('t1_') || id.startsWith('t3_')) return id;
   return isComment ? 't1_' + id : 't3_' + id;
 }
 
@@ -31,11 +36,7 @@ function extractReportData(raw: Record<string, unknown>): {
     for (const r of reportReasons) {
       if (typeof r === 'string') {
         reasons.push(r);
-      } else if (
-        r &&
-        typeof r === 'object' &&
-        'reason' in (r as Record<string, unknown>)
-      ) {
+      } else if (r && typeof r === 'object' && 'reason' in (r as Record<string, unknown>)) {
         reasons.push(String((r as Record<string, unknown>).reason));
       }
       count++;
@@ -60,13 +61,10 @@ function extractReportData(raw: Record<string, unknown>): {
   }
 
   if (count === 0) count = 1;
-
   return { reasons, count };
 }
 
-function extractContent(
-  raw: Record<string, unknown>
-): { title: string; body: string } {
+function extractContent(raw: Record<string, unknown>): { title: string; body: string } {
   let title = '';
   let body = '';
 
@@ -83,6 +81,28 @@ function extractContent(
   }
 
   return { title, body };
+}
+
+function parseCreatedAt(item: Record<string, unknown>): number {
+  const raw = item.createdAt ?? item.created_utc ?? item.created;
+
+  if (raw instanceof Date) {
+    const ts = raw.getTime();
+    if (!isNaN(ts) && ts > 0) return ts;
+  }
+
+  if (typeof raw === 'number') {
+    if (raw > 1e12) return raw;
+    if (raw > 0) return raw * 1000;
+  }
+
+  if (typeof raw === 'string') {
+    const parsed = new Date(raw);
+    const ts = parsed.getTime();
+    if (!isNaN(ts) && ts > 0) return ts;
+  }
+
+  return Date.now();
 }
 
 export async function fetchModQueue(): Promise<RawQueueItem[]> {
@@ -112,7 +132,6 @@ export async function fetchModQueue(): Promise<RawQueueItem[]> {
       log('queueFetcher', 'error', 'getModQueue failed', {
         error: queueErr instanceof Error ? queueErr.message : String(queueErr),
       });
-
       const cachedOnFail = await getCached<QueueSnapshot | null>(cacheKey, null);
       if (cachedOnFail && cachedOnFail.items.length > 0) {
         log('queueFetcher', 'info', 'Using cached snapshot after getModQueue failure', {
@@ -120,15 +139,11 @@ export async function fetchModQueue(): Promise<RawQueueItem[]> {
         });
         return cachedOnFail.items;
       }
-
       return [];
     }
 
     if (!queue || typeof queue[Symbol.asyncIterator] !== 'function') {
-      log('queueFetcher', 'warn', 'Queue is not iterable', {
-        type: typeof queue,
-      });
-
+      log('queueFetcher', 'warn', 'Queue is not iterable', { type: typeof queue });
       const cachedOnFail = await getCached<QueueSnapshot | null>(cacheKey, null);
       if (cachedOnFail && cachedOnFail.items.length > 0) {
         log('queueFetcher', 'info', 'Using cached snapshot after non-iterable queue', {
@@ -136,7 +151,6 @@ export async function fetchModQueue(): Promise<RawQueueItem[]> {
         });
         return cachedOnFail.items;
       }
-
       return [];
     }
 
@@ -149,6 +163,15 @@ export async function fetchModQueue(): Promise<RawQueueItem[]> {
         const fullname = resolveFullname(raw, isComment);
         const { reasons, count } = extractReportData(raw);
         const { title, body } = extractContent(raw);
+        const createdAt = parseCreatedAt(raw);
+
+        const authorName = toStr(item.authorName, '[deleted]');
+        if (!authorName || authorName === '[object Object]') {
+          log('queueFetcher', 'warn', 'Bad authorName detected, falling back', {
+            raw: JSON.stringify(item.authorName),
+            id: String(item.id || ''),
+          });
+        }
 
         items.push({
           id: String(item.id || ''),
@@ -156,22 +179,20 @@ export async function fetchModQueue(): Promise<RawQueueItem[]> {
           type: isComment ? 'comment' : 'post',
           title,
           body,
-          authorName: item.authorName || '[deleted]',
+          authorName: authorName && authorName !== '[object Object]' ? authorName : '[deleted]',
           subredditName,
-          createdAt: item.createdAt ? item.createdAt.getTime() : Date.now(),
+          createdAt,
           url: typeof raw.url === 'string' ? raw.url : '',
           permalink: typeof raw.permalink === 'string' ? raw.permalink : '',
           reportReasons: reasons,
           reportCount: count,
           isRemoved: false,
           isApproved: false,
-          isLocked:
-            typeof raw.isLocked === 'boolean' ? raw.isLocked : false,
+          isLocked: typeof raw.isLocked === 'boolean' ? raw.isLocked : false,
         });
       } catch (itemErr) {
         log('queueFetcher', 'warn', 'Failed to process item', {
-          error:
-            itemErr instanceof Error ? itemErr.message : String(itemErr),
+          error: itemErr instanceof Error ? itemErr.message : String(itemErr),
         });
       }
     }
@@ -197,12 +218,10 @@ export async function fetchModQueue(): Promise<RawQueueItem[]> {
     }
 
     return items;
-
   } catch (e) {
     log('queueFetcher', 'error', 'Queue fetch failed', {
       error: e instanceof Error ? e.message : String(e),
     });
-
     const cached = await getCached<QueueSnapshot | null>(cacheKey, null);
     if (cached && cached.items.length > 0) {
       log('queueFetcher', 'info', 'Using cached queue fallback', {
@@ -210,7 +229,6 @@ export async function fetchModQueue(): Promise<RawQueueItem[]> {
       });
       return cached.items;
     }
-
     return [];
   }
 }
@@ -234,45 +252,31 @@ export function extractDomains(text: string): string[] {
   return domains;
 }
 
-export function buildDomainAuthorMap(
-  items: RawQueueItem[]
-): Map<string, string[]> {
+export function buildDomainAuthorMap(items: RawQueueItem[]): Map<string, string[]> {
   const domainToAuthors = new Map<string, string[]>();
-
   for (const item of items) {
-    const text = [item.body, item.url, item.title]
-      .filter(Boolean)
-      .join(' ');
+    const text = [item.body, item.url, item.title].filter(Boolean).join(' ');
     for (const domain of extractDomains(text)) {
       const authors = domainToAuthors.get(domain) || [];
       const authorLower = item.authorName.toLowerCase();
-      if (!authors.includes(authorLower)) {
-        authors.push(authorLower);
-      }
+      if (!authors.includes(authorLower)) authors.push(authorLower);
       domainToAuthors.set(domain, authors);
     }
   }
-
   return domainToAuthors;
 }
 
-export function buildAuthorDomainMap(
-  items: RawQueueItem[]
-): Map<string, string[]> {
+export function buildAuthorDomainMap(items: RawQueueItem[]): Map<string, string[]> {
   const domainToAuthors = buildDomainAuthorMap(items);
   const authorDomains = new Map<string, string[]>();
-
   for (const [domain, authors] of domainToAuthors) {
     if (authors.length >= 2) {
       for (const author of authors) {
         const existing = authorDomains.get(author) || [];
-        if (!existing.includes(domain)) {
-          existing.push(domain);
-        }
+        if (!existing.includes(domain)) existing.push(domain);
         authorDomains.set(author, existing);
       }
     }
   }
-
   return authorDomains;
 }

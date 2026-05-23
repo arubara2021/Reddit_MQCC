@@ -1,5 +1,3 @@
-// src/client/components/WorkloadTab.tsx
-
 import { useWorkload } from '../hooks/useWorkload';
 import { EmptyState } from './EmptyState';
 import { LoadingState } from './LoadingState';
@@ -18,8 +16,8 @@ export function WorkloadTab() {
         style={{
           background: 'var(--danger-bg)',
           border: '1px solid var(--danger-border)',
-          borderRadius: 'var(--radius-md)',
-          padding: 'var(--space-4)',
+          borderRadius: 'var(--radius-lg)',
+          padding: 'var(--space-5)',
           textAlign: 'center',
         }}
       >
@@ -57,21 +55,21 @@ export function WorkloadTab() {
           <div className="stat-label">Mods</div>
         </div>
         <div className="stat-card">
-          <div className="stat-value">{workload.topFlaggedUsers.length}</div>
+          <div className="stat-value" style={{ color: workload.topFlaggedUsers.length > 0 ? 'var(--high)' : 'var(--text-muted)' }}>{workload.topFlaggedUsers.length}</div>
           <div className="stat-label">Flagged</div>
         </div>
       </div>
 
-      <div className="card" style={{ padding: 'var(--space-4)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-3)' }}>
-          <h3 style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)' }}>
+      <div className="card" style={{ padding: 'var(--space-5)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-4)' }}>
+          <h3 style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'var(--font-display)', letterSpacing: '-0.01em' }}>
             Actions by Type
           </h3>
           <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
             {workload.totalActions} total
           </span>
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
           {typeEntries.map(([type, count]) => {
             const pct = workload.totalActions > 0 ? Math.round((count / workload.totalActions) * 100) : 0;
             const typeColor =
@@ -83,15 +81,15 @@ export function WorkloadTab() {
 
             return (
               <div key={type}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-                  <span style={{ fontSize: 11, color: 'var(--text-secondary)', textTransform: 'capitalize', fontWeight: 600 }}>{type}</span>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <span style={{ fontSize: 12, color: 'var(--text-secondary)', textTransform: 'capitalize', fontWeight: 600 }}>{type}</span>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
                     <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{pct}%</span>
-                    <span style={{ fontSize: 11, fontWeight: 700, fontFamily: 'var(--font-mono)', color: typeColor }}>{count}</span>
+                    <span style={{ fontSize: 12, fontWeight: 700, fontFamily: 'var(--font-mono)', color: typeColor }}>{count}</span>
                   </div>
                 </div>
-                <div style={{ width: '100%', height: 4, background: 'var(--bg-hover)', borderRadius: 999, overflow: 'hidden' }}>
-                  <div style={{ width: pct + '%', height: '100%', background: typeColor, borderRadius: 999, transition: 'width 0.4s ease' }} />
+                <div style={{ width: '100%', height: 6, background: 'var(--bg-hover)', borderRadius: 999, overflow: 'hidden' }}>
+                  <div style={{ width: pct + '%', height: '100%', background: typeColor, borderRadius: 999, transition: 'width 0.5s var(--ease-out)' }} />
                 </div>
               </div>
             );
@@ -100,9 +98,9 @@ export function WorkloadTab() {
       </div>
 
       {modEntries.length > 0 && (
-        <div className="card" style={{ padding: 'var(--space-4)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-3)' }}>
-            <h3 style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)' }}>
+        <div className="card" style={{ padding: 'var(--space-5)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-4)' }}>
+            <h3 style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'var(--font-display)', letterSpacing: '-0.01em' }}>
               Mod Activity
             </h3>
             <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
@@ -116,17 +114,17 @@ export function WorkloadTab() {
 
               return (
                 <div key={mod}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-                    <span style={{ fontSize: 11, color: 'var(--text-primary)', fontWeight: 600, fontFamily: 'var(--font-mono)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <span style={{ fontSize: 12, color: 'var(--text-primary)', fontWeight: 600, fontFamily: 'var(--font-mono)' }}>
                       {mod || 'unknown'}
                     </span>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
                       <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{pct}%</span>
-                      <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)', fontFamily: 'var(--font-mono)' }}>{count}</span>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent)', fontFamily: 'var(--font-mono)' }}>{count}</span>
                     </div>
                   </div>
                   <div style={{ width: '100%', height: 6, background: 'var(--bg-hover)', borderRadius: 999, overflow: 'hidden' }}>
-                    <div style={{ width: barWidth + '%', height: '100%', background: 'var(--accent)', borderRadius: 999, transition: 'width 0.5s ease' }} />
+                    <div style={{ width: barWidth + '%', height: '100%', background: 'var(--accent-gradient)', borderRadius: 999, transition: 'width 0.5s var(--ease-out)' }} />
                   </div>
                 </div>
               );
@@ -136,9 +134,9 @@ export function WorkloadTab() {
       )}
 
       {workload.topFlaggedUsers.length > 0 && (
-        <div className="card" style={{ padding: 'var(--space-4)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-3)' }}>
-            <h3 style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)' }}>
+        <div className="card" style={{ padding: 'var(--space-5)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-4)' }}>
+            <h3 style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'var(--font-display)', letterSpacing: '-0.01em' }}>
               Top Flagged Users
             </h3>
             <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
@@ -151,6 +149,11 @@ export function WorkloadTab() {
                 user.actionCount >= 5 ? 'var(--critical)' :
                 user.actionCount >= 3 ? 'var(--high)' :
                 'var(--text-secondary)';
+
+              const severityBg =
+                user.actionCount >= 5 ? 'var(--critical-bg)' :
+                user.actionCount >= 3 ? 'var(--high-bg)' :
+                'transparent';
 
               return (
                 <div
@@ -165,11 +168,11 @@ export function WorkloadTab() {
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', minWidth: 0, flex: 1 }}>
-                    <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', width: 16, textAlign: 'right', flexShrink: 0 }}>
+                    <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', width: 20, textAlign: 'right', flexShrink: 0, fontWeight: 600 }}>
                       {idx + 1}
                     </span>
                     <span style={{
-                      fontSize: 11,
+                      fontSize: 12,
                       fontWeight: 600,
                       color: 'var(--text-primary)',
                       fontFamily: 'var(--font-mono)',
@@ -189,6 +192,11 @@ export function WorkloadTab() {
                       fontWeight: 700,
                       color: severityColor,
                       fontFamily: 'var(--font-mono)',
+                      background: severityBg,
+                      padding: '1px 8px',
+                      borderRadius: 'var(--radius-full)',
+                      minWidth: 32,
+                      textAlign: 'center',
                     }}>
                       {user.actionCount}x
                     </span>
@@ -201,8 +209,8 @@ export function WorkloadTab() {
       )}
 
       {workload.recentActions.length > 0 && (
-        <div className="card" style={{ padding: 'var(--space-4)' }}>
-          <h3 style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 'var(--space-3)' }}>
+        <div className="card" style={{ padding: 'var(--space-5)' }}>
+          <h3 style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 'var(--space-4)', fontFamily: 'var(--font-display)', letterSpacing: '-0.01em' }}>
             Recent Actions
           </h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
@@ -212,6 +220,12 @@ export function WorkloadTab() {
                 action.action === 'remove' ? 'var(--danger)' :
                 action.action === 'ban' ? 'var(--critical)' :
                 'var(--info)';
+
+              const actionBg =
+                action.action === 'approve' ? 'var(--success-bg)' :
+                action.action === 'remove' ? 'var(--danger-bg)' :
+                action.action === 'ban' ? 'var(--critical-bg)' :
+                'var(--info-bg)';
 
               return (
                 <div
@@ -229,19 +243,22 @@ export function WorkloadTab() {
                     <span style={{
                       fontSize: 9,
                       fontWeight: 700,
-                      letterSpacing: '0.04em',
+                      letterSpacing: '0.06em',
                       textTransform: 'uppercase',
                       color: actionColor,
+                      background: actionBg,
+                      padding: '2px 7px',
+                      borderRadius: 'var(--radius-sm)',
                       flexShrink: 0,
                       fontFamily: 'var(--font-mono)',
                     }}>
                       {action.action}
                     </span>
-                    <span style={{ fontSize: 11, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <span style={{ fontSize: 12, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       u/{action.targetAuthor || 'unknown'}
                     </span>
                   </div>
-                  <span style={{ fontSize: 10, color: 'var(--text-muted)', flexShrink: 0 }}>
+                  <span style={{ fontSize: 10, color: 'var(--text-muted)', flexShrink: 0, fontFamily: 'var(--font-mono)' }}>
                     {timeAgo(action.timestamp)}
                   </span>
                 </div>
@@ -251,7 +268,11 @@ export function WorkloadTab() {
         </div>
       )}
 
-      <button className="btn-ghost" onClick={refresh} style={{ fontSize: 11, alignSelf: 'center', marginTop: 'var(--space-2)' }}>
+      <button
+        className="btn-ghost"
+        onClick={refresh}
+        style={{ fontSize: 11, alignSelf: 'center', marginTop: 'var(--space-2)' }}
+      >
         Refresh Workload
       </button>
     </div>

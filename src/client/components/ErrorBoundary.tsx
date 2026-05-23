@@ -1,5 +1,3 @@
-// FILE 11: src/client/components/ErrorBoundary.tsx
-
 import { Component } from 'react';
 import type { ErrorInfo, ReactNode } from 'react';
 
@@ -40,8 +38,8 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            background: 'var(--bg-base, #0a0c10)',
-            color: 'var(--text-primary, #e8ecf4)',
+            background: 'var(--bg-base, #08090d)',
+            color: 'var(--text-primary, #f1f5f9)',
             fontFamily: "var(--font-sans, 'Inter', -apple-system, sans-serif)",
             padding: 24,
           }}
@@ -49,15 +47,16 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
           <div style={{ textAlign: 'center', maxWidth: 400 }}>
             <div
               style={{
-                width: 48,
-                height: 48,
-                borderRadius: 12,
-                background: 'rgba(239, 68, 68, 0.08)',
-                border: '1px solid rgba(239, 68, 68, 0.2)',
+                width: 52,
+                height: 52,
+                borderRadius: 14,
+                background: 'rgba(244, 63, 94, 0.08)',
+                border: '1px solid rgba(244, 63, 94, 0.2)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 margin: '0 auto 20px',
+                boxShadow: '0 0 20px rgba(244, 63, 94, 0.08)',
               }}
             >
               <svg
@@ -65,7 +64,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
                 height="22"
                 viewBox="0 0 24 24"
                 fill="none"
-                stroke="#ef4444"
+                stroke="#f43f5e"
                 strokeWidth={2}
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -78,10 +77,12 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
             <h2
               style={{
+                fontFamily: "var(--font-display, 'Space Grotesk', sans-serif)",
                 fontSize: 16,
                 fontWeight: 700,
                 marginBottom: 8,
                 lineHeight: 1.3,
+                letterSpacing: '-0.01em',
               }}
             >
               Something went wrong
@@ -90,8 +91,8 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
             <p
               style={{
                 fontSize: 12,
-                color: 'var(--text-muted, #4a5568)',
-                lineHeight: 1.5,
+                color: 'var(--text-muted, #475569)',
+                lineHeight: 1.6,
                 marginBottom: 24,
               }}
             >
@@ -101,10 +102,10 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
             {this.state.error && (
               <div
                 style={{
-                  background: 'rgba(239, 68, 68, 0.06)',
-                  border: '1px solid rgba(239, 68, 68, 0.15)',
-                  borderRadius: 6,
-                  padding: '10px 14px',
+                  background: 'rgba(244, 63, 94, 0.06)',
+                  border: '1px solid rgba(244, 63, 94, 0.15)',
+                  borderRadius: 8,
+                  padding: '12px 16px',
                   marginBottom: 20,
                   textAlign: 'left',
                 }}
@@ -112,7 +113,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
                 <code
                   style={{
                     fontSize: 11,
-                    color: '#fca5a5',
+                    color: '#fda4af',
                     fontFamily: "var(--font-mono, 'JetBrains Mono', monospace)",
                     wordBreak: 'break-all',
                     lineHeight: 1.5,
@@ -132,12 +133,14 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
                 gap: 8,
                 fontWeight: 600,
                 fontSize: 12,
-                padding: '8px 20px',
-                borderRadius: 6,
-                background: 'var(--accent, #4f8ff7)',
+                padding: '10px 24px',
+                borderRadius: 8,
+                background: 'var(--accent, #3b82f6)',
                 color: 'white',
                 border: 'none',
                 cursor: 'pointer',
+                boxShadow: '0 2px 8px rgba(59, 130, 246, 0.25)',
+                transition: 'all 0.15s ease',
               }}
             >
               Reload Page

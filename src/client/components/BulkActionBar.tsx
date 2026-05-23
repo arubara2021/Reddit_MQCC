@@ -21,10 +21,11 @@ export const BulkActionBar = memo(function BulkActionBar({
     <div className="sticky-bottom">
       <div
         style={{
-          background: 'var(--bg-surface)',
+          background: 'rgba(15, 17, 24, 0.85)',
+          backdropFilter: 'blur(16px)',
           border: '1px solid var(--border-default)',
-          borderRadius: 'var(--radius-lg)',
-          padding: 'var(--space-3) var(--space-4)',
+          borderRadius: 'var(--radius-xl)',
+          padding: 'var(--space-3) var(--space-5)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
@@ -35,12 +36,21 @@ export const BulkActionBar = memo(function BulkActionBar({
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent)', fontFamily: 'var(--font-mono)' }}>{selectedCount}</span>
+            <span style={{
+              fontSize: 12,
+              fontWeight: 700,
+              color: 'var(--accent)',
+              fontFamily: 'var(--font-mono)',
+              background: 'var(--accent-muted)',
+              border: '1px solid var(--accent-border)',
+              padding: '2px 8px',
+              borderRadius: 'var(--radius-sm)',
+            }}>{selectedCount}</span>
             <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>selected</span>
           </div>
           <button
             onClick={onDeselectAll}
-            style={{ fontSize: 10, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
+            style={{ fontSize: 10, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', transition: 'color var(--duration-fast) ease' }}
           >
             Clear
           </button>
@@ -48,7 +58,7 @@ export const BulkActionBar = memo(function BulkActionBar({
           <select
             value={banDuration}
             onChange={(e) => onBanDurationChange(Number(e.target.value))}
-            style={{ fontSize: 11, padding: '3px 24px 3px 6px', background: 'var(--bg-base)' }}
+            style={{ fontSize: 11, padding: '4px 24px 4px 8px' }}
           >
             <option value={0}>Permanent</option>
             <option value={1}>1 day</option>
@@ -60,20 +70,20 @@ export const BulkActionBar = memo(function BulkActionBar({
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-1)', flexWrap: 'wrap' }}>
-          <button className="btn-approve" onClick={() => onAction('approve')} disabled={loading} style={{ fontSize: 10, padding: '5px 12px' }}>
+          <button className="btn-approve" onClick={() => onAction('approve')} disabled={loading} style={{ fontSize: 10, padding: '6px 14px' }}>
             Approve
           </button>
-          <button className="btn-ghost" onClick={() => onAction('remove')} disabled={loading} style={{ fontSize: 10, padding: '5px 12px' }}>
+          <button className="btn-ghost" onClick={() => onAction('remove')} disabled={loading} style={{ fontSize: 10, padding: '6px 14px' }}>
             Remove
           </button>
-          <button className="btn-danger" onClick={() => onAction('ban')} disabled={loading} style={{ fontSize: 10, padding: '5px 12px' }}>
+          <button className="btn-danger" onClick={() => onAction('ban')} disabled={loading} style={{ fontSize: 10, padding: '6px 14px' }}>
             Ban
           </button>
           <button
             className="btn-danger"
             onClick={() => onAction('removeAndBan')}
             disabled={loading}
-            style={{ fontSize: 10, padding: '5px 12px', background: '#991b1b' }}
+            style={{ fontSize: 10, padding: '6px 14px', background: '#881337' }}
           >
             R+B
           </button>

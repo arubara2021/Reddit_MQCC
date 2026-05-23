@@ -1,6 +1,5 @@
-// src/client/hooks/useQueue.ts
 import { useState, useEffect, useCallback, useRef } from 'react';
-import type { EnrichedQueueItem, GroupedQueueItem } from '../../shared/api';
+import type { EnrichedQueueItem, GroupedQueueItem, Anomaly, PatternResult } from '../../shared/api';
 
 interface QueueState {
   items: EnrichedQueueItem[];
@@ -8,6 +7,8 @@ interface QueueState {
   lastUpdated: number;
   loading: boolean;
   error: string | null;
+  anomalies: Anomaly[];
+  patterns: PatternResult | null;
 }
 
 const INITIAL_STATE: QueueState = {
@@ -16,6 +17,8 @@ const INITIAL_STATE: QueueState = {
   lastUpdated: 0,
   loading: true,
   error: null,
+  anomalies: [],
+  patterns: null,
 };
 
 export function useQueue(autoRefresh: boolean, intervalMs: number) {
@@ -35,7 +38,7 @@ export function useQueue(autoRefresh: boolean, intervalMs: number) {
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(
-          (data as any).message || 'Failed to fetch queue'
+          (data as Record<string, string>).message || 'Failed to fetch queue'
         );
       }
 
@@ -49,6 +52,8 @@ export function useQueue(autoRefresh: boolean, intervalMs: number) {
         lastUpdated: data.lastUpdated || Date.now(),
         loading: false,
         error: null,
+        anomalies: data.anomalies || [],
+        patterns: data.patterns || null,
       });
     } catch (e) {
       if (!mountedRef.current) return;
@@ -63,7 +68,6 @@ export function useQueue(autoRefresh: boolean, intervalMs: number) {
     }
   }, []);
 
-  // Initial fetch
   useEffect(() => {
     mountedRef.current = true;
     fetchQueue();
@@ -73,7 +77,6 @@ export function useQueue(autoRefresh: boolean, intervalMs: number) {
     };
   }, [fetchQueue]);
 
-  // Auto-refresh
   useEffect(() => {
     if (!autoRefresh) return;
 

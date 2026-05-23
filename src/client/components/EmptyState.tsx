@@ -1,4 +1,3 @@
-// src/client/components/EmptyState.tsx
 import { memo } from 'react';
 
 interface EmptyStateProps {
@@ -14,14 +13,14 @@ export const EmptyState = memo(function EmptyState({
     <div
       className="card animate-fade-in"
       style={{
-        padding: '48px var(--space-6)',
+        padding: '56px var(--space-6)',
         textAlign: 'center',
       }}
     >
       <div
         style={{
-          width: 48,
-          height: 48,
+          width: 52,
+          height: 52,
           borderRadius: 'var(--radius-xl)',
           background: 'var(--success-bg)',
           border: '1px solid var(--success-border)',
@@ -29,6 +28,7 @@ export const EmptyState = memo(function EmptyState({
           alignItems: 'center',
           justifyContent: 'center',
           margin: '0 auto var(--space-4)',
+          boxShadow: '0 0 24px rgba(16, 185, 129, 0.08)',
         }}
       >
         <svg
@@ -52,6 +52,8 @@ export const EmptyState = memo(function EmptyState({
           fontWeight: 700,
           color: 'var(--text-primary)',
           marginBottom: 'var(--space-2)',
+          fontFamily: 'var(--font-display)',
+          letterSpacing: '-0.01em',
         }}
       >
         {title}
@@ -60,9 +62,9 @@ export const EmptyState = memo(function EmptyState({
         style={{
           fontSize: 12,
           color: 'var(--text-muted)',
-          maxWidth: 260,
+          maxWidth: 280,
           margin: '0 auto',
-          lineHeight: 1.5,
+          lineHeight: 1.6,
         }}
       >
         {description}

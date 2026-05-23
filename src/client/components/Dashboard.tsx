@@ -1,5 +1,6 @@
-import { useState, useCallback, useMemo, useEffect } from 'react';
-import type { EnrichedQueueItem, Anomaly, PatternResult } from '../../shared/api';
+import React,{ useState, useCallback, useMemo, useEffect } from 'react';
+
+import type { EnrichedQueueItem } from '../../shared/api';
 import { useQueue } from '../hooks/useQueue';
 import { useSettings } from '../hooks/useSettings';
 import { PriorityQueue } from './PriorityQueue';
@@ -15,20 +16,23 @@ import { PublicDashboard } from './PublicDashboard';
 
 type TabId = 'queue' | 'workload' | 'alerts' | 'settings';
 type FilterId = 'all' | 'posts' | 'comments' | 'critical' | 'high';
+type SortBy = 'priority' | 'newest' | 'oldest';
 
 export function Dashboard() {
   const [isMod, setIsMod] = useState(false);
   const [subredditName, setSubredditName] = useState('unknown');
   const [initDone, setInitDone] = useState(false);
+  const [viewMode, setViewMode] = useState<'mod' | 'public'>('mod');
 
   const { settings, updateSettings } = useSettings();
-  const { items, groups, lastUpdated, loading, error, refresh } = useQueue(
-    isMod && settings.autoRefresh,
+  const { items, groups, lastUpdated, loading, error, refresh, anomalies, patterns } = useQueue(
+    isMod && settings.autoRefresh && viewMode === 'mod',
     settings.refreshIntervalMs
   );
 
   const [activeTab, setActiveTab] = useState<TabId>('queue');
   const [activeFilter, setActiveFilter] = useState<FilterId>('all');
+  const [sortBy, setSortBy] = useState<SortBy>('priority');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [detailItem, setDetailItem] = useState<EnrichedQueueItem | null>(null);
   const [confirmAction, setConfirmAction] = useState<{
@@ -39,10 +43,11 @@ export function Dashboard() {
   } | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' | 'info' } | null>(null);
-  const [anomalies, setAnomalies] = useState<Anomaly[]>([]);
-  const [patterns, setPatterns] = useState<PatternResult | null>(null);
   const [banDuration, setBanDuration] = useState<number>(0);
   const [handledItems, setHandledItems] = useState<Record<string, string>>({});
+  const [refreshProgress, setRefreshProgress] = useState(0);
+  const [authorFilter, setAuthorFilter] = useState('');
+  const [resetLoading, setResetLoading] = useState(false);
 
   useEffect(() => {
     fetch('/api/init')
@@ -65,20 +70,29 @@ export function Dashboard() {
   }, []);
 
   useEffect(() => {
-    if (!isMod) return;
-    Promise.allSettled([
-      fetch('/api/anomalies').then((r) => r.json()),
-      fetch('/api/patterns').then((r) => r.json()),
-    ]).then(([anomaliesRes, patternsRes]) => {
-      if (anomaliesRes.status === 'fulfilled') setAnomalies(anomaliesRes.value.anomalies || []);
-      if (patternsRes.status === 'fulfilled') setPatterns(patternsRes.value.patterns || null);
-    });
-  }, [isMod]);
+    if (!settings.autoRefresh || !isMod || viewMode !== 'mod') return;
+    const interval = 100;
+    const total = settings.refreshIntervalMs;
+    let elapsed = 0;
+    const timer = setInterval(() => {
+      elapsed += interval;
+      setRefreshProgress(Math.min((elapsed / total) * 100, 100));
+      if (elapsed >= total) {
+        elapsed = 0;
+        setRefreshProgress(0);
+      }
+    }, interval);
+    return () => clearInterval(timer);
+  }, [settings.autoRefresh, settings.refreshIntervalMs, isMod, viewMode]);
 
   const filteredItems = useMemo(() => {
-    return items
+    const filtered = items
       .filter((i) => !handledItems[i.id])
       .filter((i) => {
+        if (authorFilter) {
+          const q = authorFilter.toLowerCase();
+          if (!i.authorName.toLowerCase().includes(q)) return false;
+        }
         switch (activeFilter) {
           case 'posts': return i.type === 'post';
           case 'comments': return i.type === 'comment';
@@ -87,7 +101,23 @@ export function Dashboard() {
           default: return true;
         }
       });
-  }, [items, activeFilter, handledItems]);
+
+    const sorted = [...filtered];
+    switch (sortBy) {
+      case 'newest':
+        sorted.sort((a, b) => b.createdAt - a.createdAt);
+        break;
+      case 'oldest':
+        sorted.sort((a, b) => a.createdAt - b.createdAt);
+        break;
+      case 'priority':
+      default:
+        sorted.sort((a, b) => b.priority.score - a.priority.score);
+        break;
+    }
+
+    return sorted;
+  }, [items, activeFilter, handledItems, authorFilter, sortBy]);
 
   const stats = useMemo(() => {
     const active = items.filter((i) => !handledItems[i.id]);
@@ -114,14 +144,11 @@ export function Dashboard() {
 
   const executeSingleAction = useCallback(async (id: string, action: string) => {
     setActionLoading(true);
-
     setHandledItems((prev) => ({ ...prev, [id]: action }));
     setSelectedIds((prev) => { const next = new Set(prev); next.delete(id); return next; });
-
     try {
       const item = items.find((i) => i.id === id);
       if (!item) return;
-
       const endpoint = '/api/action/' + action;
       let body: Record<string, unknown>;
       if (action === 'ban') {
@@ -131,16 +158,21 @@ export function Dashboard() {
       } else {
         body = { fullname: item.fullname, authorName: item.authorName };
       }
-
       const res = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       const data = await res.json();
-
       if (res.ok && data.success) {
-        showToast(data.message || action + ' succeeded', 'success');
+        const labels: Record<string, string> = {
+          approve: 'Approved',
+          remove: 'Removed',
+          ban: 'Banned',
+          lock: 'Locked',
+          removeAndBan: 'Removed & Banned',
+        };
+        showToast((labels[action] || action) + ' u/' + item.authorName, 'success');
         setTimeout(refresh, 500);
       }
     } catch {
-      // Silent — item stays removed from UI
+      // silent
     } finally {
       setActionLoading(false);
       setConfirmAction(null);
@@ -165,7 +197,6 @@ export function Dashboard() {
   const executeBulkAction = useCallback(async (action: string) => {
     const selected = getSelectedItems();
     if (selected.length === 0) return;
-
     const newHandled: Record<string, string> = {};
     for (const item of selected) {
       newHandled[item.id] = action;
@@ -173,10 +204,10 @@ export function Dashboard() {
     setHandledItems((prev) => ({ ...prev, ...newHandled }));
     deselectAll();
     setActionLoading(true);
-
     try {
       const res = await fetch('/api/action/bulk', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action, items: selected, durationDays: banDuration, reason: 'Bulk action via MQCC' }),
       });
       const data = await res.json();
@@ -185,7 +216,7 @@ export function Dashboard() {
         setTimeout(refresh, 500);
       }
     } catch {
-      // Silent
+      // silent
     } finally {
       setActionLoading(false);
       setConfirmAction(null);
@@ -208,6 +239,38 @@ export function Dashboard() {
     executeBulkAction(action);
   }, [getSelectedItems, executeBulkAction]);
 
+  useEffect(() => {
+    if (!isMod || activeTab !== 'queue' || viewMode !== 'mod') return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.key === 'r') { refresh(); }
+      if (e.key === 'a' && selectedIds.size > 0) { handleBulkAction('approve'); }
+      if (e.key === 'x' && selectedIds.size > 0) { handleBulkAction('remove'); }
+      if (e.key === 'Escape') { deselectAll(); setDetailItem(null); setConfirmAction(null); setAuthorFilter(''); }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isMod, activeTab, selectedIds, refresh, viewMode, handleBulkAction, deselectAll]);
+
+  const handleResetData = useCallback(async () => {
+    setResetLoading(true);
+    try {
+      const res = await fetch('/api/cleanup', { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        showToast(data.message || 'All data cleared', 'success');
+        setTimeout(() => window.location.reload(), 1500);
+      } else {
+        showToast(data.message || 'Reset failed', 'error');
+      }
+    } catch {
+      showToast('Reset failed — try again', 'error');
+    } finally {
+      setResetLoading(false);
+      setConfirmAction(null);
+    }
+  }, [showToast]);
+
   const selectedCount = selectedIds.size;
 
   if (!initDone) {
@@ -222,9 +285,86 @@ export function Dashboard() {
     return <PublicDashboard subredditName={subredditName} />;
   }
 
+  if (viewMode === 'public') {
+    return (
+      <div>
+        <div
+          style={{
+            position: 'sticky',
+            top: 0,
+            zIndex: 100,
+            background: 'rgba(0, 0, 0, 0.9)',
+            backdropFilter: 'blur(12px)',
+            borderBottom: '1px solid rgba(139, 92, 246, 0.15)',
+            padding: '10px 16px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '12px',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div
+              className="mod-brand-icon"
+              style={{
+                width: 28,
+                height: 28,
+              }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+              </svg>
+            </div>
+            <span
+              style={{
+                fontSize: 13,
+                fontWeight: 700,
+                color: 'var(--text-primary)',
+                fontFamily: 'var(--font-display)',
+                letterSpacing: '-0.01em',
+              }}
+            >
+              Community View
+            </span>
+          </div>
+          <button
+            className="btn-primary"
+            style={{ fontSize: 11, padding: '6px 14px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+            onClick={() => setViewMode('mod')}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+            </svg>
+            Mod Dashboard
+          </button>
+        </div>
+        <PublicDashboard subredditName={subredditName} />
+      </div>
+    );
+  }
+
+  const selectStyle: React.CSSProperties = {
+    fontSize: 11,
+    padding: '5px 24px 5px 8px',
+    background: 'var(--bg-input)',
+    border: '1px solid var(--border-default)',
+    borderRadius: 'var(--radius-md)',
+    color: 'var(--text-primary)',
+    fontFamily: 'var(--font-sans)',
+    outline: 'none',
+    cursor: 'pointer',
+    flexShrink: 0,
+    transition: 'border-color var(--duration-fast) ease',
+  };
+
   return (
     <div className="mod-root">
       <div className="mod-header-sticky">
+        {settings.autoRefresh && (
+          <div style={{ height: 2, background: 'var(--bg-hover)', width: '100%' }}>
+            <div style={{ height: '100%', width: refreshProgress + '%', background: 'var(--accent)', transition: 'width 0.1s linear', borderRadius: '0 2px 2px 0', opacity: 0.6 }} />
+          </div>
+        )}
         <div className="mod-container">
           <div className="mod-header-row">
             <div className="mod-brand">
@@ -240,6 +380,28 @@ export function Dashboard() {
             </div>
             <div className="mod-header-actions">
               <button
+                className="btn-ghost"
+                style={{
+                  fontSize: 10,
+                  padding: '5px 12px',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  color: 'var(--pub-accent)',
+                  borderColor: 'var(--pub-accent-border)',
+                }}
+                onClick={() => setViewMode('public')}
+                title="Switch to Community View"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4-4v2" />
+                  <circle cx="9" cy="7" r="4" />
+                  <path d="M23 21v-2a4 4 0 00-3-3.87" />
+                  <path d="M16 3.13a4 4 0 010 7.75" />
+                </svg>
+                Community
+              </button>
+              <button
                 className="btn-icon"
                 onClick={() => updateSettings({ autoRefresh: !settings.autoRefresh })}
                 title={settings.autoRefresh ? 'Auto-refresh ON' : 'Auto-refresh OFF'}
@@ -250,7 +412,6 @@ export function Dashboard() {
                   {settings.autoRefresh && <circle cx="12" cy="12" r="3" fill="currentColor" />}
                 </svg>
               </button>
-
               <button className="btn-ghost mod-refresh-btn" onClick={refresh} disabled={loading}>
                 <span className={loading ? 'animate-spin' : ''} style={{ display: 'inline-flex' }}>
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
@@ -300,28 +461,73 @@ export function Dashboard() {
       <div className="mod-container mod-content">
         {activeTab === 'queue' && (
           <div className="animate-fade-in">
-            <div className="filter-bar mod-filter-bar">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
-              </svg>
-              {([
-                { id: 'all' as FilterId, label: 'All' },
-                { id: 'posts' as FilterId, label: 'Posts (' + stats.posts + ')' },
-                { id: 'comments' as FilterId, label: 'Comments (' + stats.comments + ')' },
-                { id: 'critical' as FilterId, label: 'Critical' },
-                { id: 'high' as FilterId, label: 'High' },
-              ]).map((f) => (
-                <button
-                  key={f.id}
-                  className={'filter-chip' + (activeFilter === f.id ? ' active' : '')}
-                  onClick={() => setActiveFilter(f.id)}
-                >
-                  {f.label}
-                </button>
-              ))}
+
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 'var(--space-2)',
+              marginBottom: 'var(--space-3)',
+              flexWrap: 'wrap',
+            }}>
+              <select
+                value={activeFilter}
+                onChange={(e) => setActiveFilter(e.target.value as FilterId)}
+                style={selectStyle}
+              >
+                <option value="all">All ({stats.total})</option>
+                <option value="posts">Posts ({stats.posts})</option>
+                <option value="comments">Comments ({stats.comments})</option>
+                <option value="critical">Critical</option>
+                <option value="high">High</option>
+              </select>
+
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as SortBy)}
+                style={selectStyle}
+              >
+                <option value="priority">Priority</option>
+                <option value="newest">Newest</option>
+                <option value="oldest">Oldest</option>
+              </select>
+
+              <div style={{ position: 'relative', flex: 1, minWidth: 80 }}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}>
+                  <circle cx="11" cy="11" r="8" />
+                  <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                </svg>
+                <input
+                  type="text"
+                  placeholder="Author..."
+                  value={authorFilter}
+                  onChange={(e) => setAuthorFilter(e.target.value)}
+                  style={{
+                    width: '100%',
+                    fontSize: 11,
+                    padding: '5px 8px 5px 26px',
+                    background: 'var(--bg-input)',
+                    border: '1px solid var(--border-default)',
+                    borderRadius: 'var(--radius-md)',
+                    color: 'var(--text-primary)',
+                    outline: 'none',
+                  }}
+                />
+              </div>
             </div>
 
-            {patterns && <PatternAlert patterns={patterns} />}
+            {items.length > 0 && (
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', padding: 'var(--space-1) 0', marginBottom: 'var(--space-2)', fontFamily: 'var(--font-mono)' }}>
+                {stats.critical > 0 && (
+                  <span style={{ color: 'var(--critical)', fontWeight: 700 }}>{stats.critical} critical</span>
+                )}
+                {stats.critical > 0 && stats.high > 0 && <span style={{ color: 'var(--border-strong)' }}> · </span>}
+                {stats.high > 0 && (
+                  <span style={{ color: 'var(--high)', fontWeight: 600 }}>{stats.high} high priority</span>
+                )}
+                {(stats.critical > 0 || stats.high > 0) && <span style={{ color: 'var(--border-strong)' }}> · </span>}
+                <span>{stats.total} items · {sortBy} · {Math.round((Date.now() - lastUpdated) / 1000)}s ago</span>
+              </div>
+            )}
 
             {error && (
               <div className="mod-error-banner">
@@ -329,17 +535,27 @@ export function Dashboard() {
               </div>
             )}
 
-            {anomalies.length > 0 && <AlertBanner anomalies={anomalies} />}
+            {anomalies.length > 0 && (
+              <div style={{ marginBottom: 'var(--space-2)' }}>
+                <AlertBanner anomalies={anomalies} />
+              </div>
+            )}
+
+            {patterns && (
+              <div style={{ marginBottom: 'var(--space-3)' }}>
+                <PatternAlert patterns={patterns} />
+              </div>
+            )}
 
             {loading && items.length === 0 ? (
               <LoadingState message="Loading queue..." />
             ) : filteredItems.length === 0 ? (
               <EmptyState
-                title="Queue is clear"
-                description={activeFilter === 'all' ? 'No reported items. Good work.' : 'No items match this filter.'}
+                title={authorFilter ? 'No matches for "' + authorFilter + '"' : 'Queue is clear'}
+                description={authorFilter ? 'No queue items from this author.' : activeFilter === 'all' ? 'No reported items. Good work.' : 'No items match this filter.'}
               />
             ) : (
-              <PriorityQueue
+                <PriorityQueue
                 items={filteredItems}
                 groups={groups}
                 selectedIds={selectedIds}
@@ -349,7 +565,9 @@ export function Dashboard() {
                 onDeselectAll={deselectAll}
                 onViewDetail={setDetailItem}
                 compactMode={settings.compactMode}
+                sortBy={sortBy}
               />
+
             )}
 
             {selectedCount > 0 && (
@@ -411,7 +629,7 @@ export function Dashboard() {
                 <span className="mod-settings-label">Auto-refresh</span>
                 <button
                   className={settings.autoRefresh ? 'btn-primary' : 'btn-ghost'}
-                  style={{ padding: '4px 12px', fontSize: 11 }}
+                  style={{ padding: '4px 14px', fontSize: 11 }}
                   onClick={() => updateSettings({ autoRefresh: !settings.autoRefresh })}
                 >
                   {settings.autoRefresh ? 'ON' : 'OFF'}
@@ -439,7 +657,7 @@ export function Dashboard() {
                 <span className="mod-settings-label">Compact mode</span>
                 <button
                   className={settings.compactMode ? 'btn-primary' : 'btn-ghost'}
-                  style={{ padding: '4px 12px', fontSize: 11 }}
+                  style={{ padding: '4px 14px', fontSize: 11 }}
                   onClick={() => updateSettings({ compactMode: !settings.compactMode })}
                 >
                   {settings.compactMode ? 'ON' : 'OFF'}
@@ -449,7 +667,7 @@ export function Dashboard() {
                 <span className="mod-settings-label">Group spam rings</span>
                 <button
                   className={settings.groupSpamRings ? 'btn-primary' : 'btn-ghost'}
-                  style={{ padding: '4px 12px', fontSize: 11 }}
+                  style={{ padding: '4px 14px', fontSize: 11 }}
                   onClick={() => updateSettings({ groupSpamRings: !settings.groupSpamRings })}
                 >
                   {settings.groupSpamRings ? 'ON' : 'OFF'}
@@ -463,10 +681,56 @@ export function Dashboard() {
                 <span className="mod-settings-label">Enable anomaly alerts</span>
                 <button
                   className={settings.enableAlerts ? 'btn-primary' : 'btn-ghost'}
-                  style={{ padding: '4px 12px', fontSize: 11 }}
+                  style={{ padding: '4px 14px', fontSize: 11 }}
                   onClick={() => updateSettings({ enableAlerts: !settings.enableAlerts })}
                 >
                   {settings.enableAlerts ? 'ON' : 'OFF'}
+                </button>
+              </div>
+            </div>
+
+            <div className="card mod-settings-card">
+              <h3 className="mod-settings-heading">Data Management</h3>
+              <div className="mod-settings-row">
+                <div style={{ flex: 1 }}>
+                  <span className="mod-settings-label">Reset all stored data</span>
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4, lineHeight: 1.5 }}>
+                    Clears cached queue, mod action history, anomaly state, stored mod list, and settings.
+                  </div>
+                </div>
+                <button
+                  className="btn-danger"
+                  style={{ padding: '5px 14px', fontSize: 11, flexShrink: 0 }}
+                  disabled={resetLoading}
+                  onClick={() => {
+                    setConfirmAction({
+                      title: 'Reset All Data',
+                      message: 'This will permanently clear all cached queue data, mod action history, anomaly cooldowns, stored mod list, and subreddit settings. This cannot be undone.',
+                      danger: true,
+                      onConfirm: handleResetData,
+                    });
+                  }}
+                >
+                  {resetLoading ? (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                      <span className="animate-spin" style={{ display: 'inline-flex' }}>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="23 4 23 10 17 10" />
+                          <polyline points="1 20 1 14 7 14" />
+                          <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" />
+                        </svg>
+                      </span>
+                      Resetting...
+                    </span>
+                  ) : (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="3 6 5 6 21 6" />
+                        <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
+                      </svg>
+                      Reset Data
+                    </span>
+                  )}
                 </button>
               </div>
             </div>
@@ -495,7 +759,7 @@ export function Dashboard() {
           title={confirmAction.title}
           message={confirmAction.message}
           danger={confirmAction.danger}
-          loading={actionLoading}
+          loading={actionLoading || resetLoading}
           onConfirm={confirmAction.onConfirm}
           onCancel={() => setConfirmAction(null)}
         />

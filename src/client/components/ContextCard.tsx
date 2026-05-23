@@ -1,4 +1,3 @@
-// src/client/components/ContextCard.tsx
 import { memo } from 'react';
 import type { UserContext } from '../../shared/api';
 
@@ -30,11 +29,11 @@ export const ContextCard = memo(function ContextCard({ context }: ContextCardPro
         <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>Age: --</span>
       )}
 
-      <span style={{ fontSize: 10, color: 'var(--border-strong)' }}>|</span>
+      <span style={{ fontSize: 10, color: 'var(--border-strong)' }}>·</span>
 
       {context.totalKarma >= 0 ? (
         <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontWeight: 500 }}>
-          {context.totalKarma} karma
+          {context.totalKarma.toLocaleString()} karma
         </span>
       ) : (
         <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>Karma: --</span>

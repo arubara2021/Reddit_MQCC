@@ -1,6 +1,8 @@
 import type { EnrichedQueueItem, GroupedQueueItem } from '../../shared/api';
 import { QueueItem } from './QueueItem';
 
+type SortBy = 'priority' | 'newest' | 'oldest';
+
 interface PriorityQueueProps {
   items: EnrichedQueueItem[];
   groups: GroupedQueueItem[];
@@ -11,11 +13,12 @@ interface PriorityQueueProps {
   onDeselectAll: () => void;
   onViewDetail: (item: EnrichedQueueItem) => void;
   compactMode: boolean;
+  sortBy: SortBy;
 }
 
 const groupColors: Record<string, string> = {
   link_cluster: 'var(--info)',
-  time_burst: 'var(--warning)',
+  time_burst: 'var(--high)',
   username_pattern: 'var(--accent)',
 };
 
@@ -40,6 +43,7 @@ export function PriorityQueue({
   onDeselectAll,
   onViewDetail,
   compactMode,
+  sortBy,
 }: PriorityQueueProps) {
   const groupedItemIds = new Set<string>();
   for (const group of groups) {
@@ -49,7 +53,19 @@ export function PriorityQueue({
   }
 
   const ungroupedItems = items.filter((item) => !groupedItemIds.has(item.id));
-  const sorted = [...ungroupedItems].sort((a, b) => b.priority.score - a.priority.score);
+  const sorted = [...ungroupedItems];
+  switch (sortBy) {
+    case 'newest':
+      sorted.sort((a, b) => b.createdAt - a.createdAt);
+      break;
+    case 'oldest':
+      sorted.sort((a, b) => a.createdAt - b.createdAt);
+      break;
+    case 'priority':
+    default:
+      sorted.sort((a, b) => b.priority.score - a.priority.score);
+      break;
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
@@ -57,14 +73,14 @@ export function PriorityQueue({
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
           <button
             onClick={onSelectAll}
-            style={{ fontSize: 11, fontWeight: 600, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer' }}
+            style={{ fontSize: 11, fontWeight: 600, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', transition: 'color var(--duration-fast) ease' }}
           >
             Select all
           </button>
-          <span style={{ fontSize: 10, color: 'var(--border-default)' }}>|</span>
+          <span style={{ fontSize: 10, color: 'var(--border-default)' }}>·</span>
           <button
             onClick={onDeselectAll}
-            style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer' }}
+            style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', transition: 'color var(--duration-fast) ease' }}
           >
             Deselect
           </button>
@@ -78,11 +94,12 @@ export function PriorityQueue({
               style={{
                 fontSize: 9,
                 fontWeight: 700,
-                letterSpacing: '0.06em',
+                letterSpacing: '0.08em',
                 color: groupColors[group.groupType] || 'var(--accent)',
                 background: 'var(--bg-hover)',
-                padding: '2px 6px',
+                padding: '2px 7px',
                 borderRadius: 'var(--radius-sm)',
+                fontFamily: 'var(--font-mono)',
               }}
             >
               {groupLabels[group.groupType] || 'GROUP'}
@@ -95,8 +112,8 @@ export function PriorityQueue({
             </span>
           </div>
 
-          <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{group.label}</p>
-          <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{group.description}</p>
+          <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', fontFamily: 'var(--font-display)', letterSpacing: '-0.01em' }}>{group.label}</p>
+          <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2, lineHeight: 1.5 }}>{group.description}</p>
 
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-1)', marginTop: 'var(--space-2)' }}>
             {group.authors.slice(0, 6).map((author, idx) => (
@@ -117,8 +134,10 @@ export function PriorityQueue({
                     fontWeight: 600,
                     color: 'var(--info)',
                     background: 'var(--info-bg)',
-                    padding: '1px 6px',
+                    border: '1px solid var(--info-border)',
+                    padding: '1px 7px',
                     borderRadius: 'var(--radius-full)',
+                    fontFamily: 'var(--font-mono)',
                   }}
                 >
                   {domain}
@@ -141,13 +160,14 @@ export function PriorityQueue({
                   style={{
                     fontSize: 11,
                     background: 'var(--bg-base)',
-                    borderRadius: 'var(--radius-sm)',
-                    padding: '6px 8px',
+                    borderRadius: 'var(--radius-md)',
+                    padding: '8px 10px',
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'center',
                     border: '1px solid var(--border-subtle)',
                     gap: 'var(--space-2)',
+                    transition: 'border-color var(--duration-fast) ease',
                   }}
                 >
                   <span style={{ color: 'var(--text-secondary)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>

@@ -24,7 +24,7 @@ function Splash() {
       style={{
         width: '100%',
         minHeight: 120,
-        background: 'linear-gradient(135deg, #0b1120 0%, #111d35 50%, #0f172a 100%)',
+        background: 'linear-gradient(135deg, #08090d 0%, #0f1118 50%, #0b0d14 100%)',
         borderRadius: 12,
         padding: '20px 24px',
         display: 'flex',
@@ -33,7 +33,7 @@ function Splash() {
         position: 'relative',
         overflow: 'hidden',
         cursor: 'pointer',
-        border: '1px solid rgba(240,180,41,0.15)',
+        border: '1px solid rgba(59, 130, 246, 0.12)',
       }}
     >
       <div
@@ -44,7 +44,7 @@ function Splash() {
           width: 160,
           height: 160,
           borderRadius: '50%',
-          background: 'radial-gradient(circle, rgba(240,180,41,0.08) 0%, transparent 70%)',
+          background: 'radial-gradient(circle, rgba(59, 130, 246, 0.08) 0%, transparent 70%)',
           pointerEvents: 'none',
         }}
       />
@@ -54,12 +54,12 @@ function Splash() {
           width: 48,
           height: 48,
           borderRadius: 14,
-          background: 'linear-gradient(135deg, #f0b429 0%, #e09100 100%)',
+          background: 'linear-gradient(135deg, #2563eb 0%, #3b82f6 100%)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           flexShrink: 0,
-          boxShadow: '0 4px 16px rgba(240,180,41,0.3)',
+          boxShadow: '0 4px 16px rgba(59, 130, 246, 0.3)',
         }}
       >
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
@@ -68,13 +68,13 @@ function Splash() {
       </div>
 
       <div style={{ flex: 1, minWidth: 0, position: 'relative', zIndex: 1 }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: '#f0b429', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 2 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: '#3b82f6', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 2 }}>
           Community Pulse
         </div>
-        <div style={{ fontSize: 16, fontWeight: 700, color: '#eef0f6', lineHeight: 1.2 }}>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 17, fontWeight: 700, color: '#f1f5f9', lineHeight: 1.2, letterSpacing: '-0.02em' }}>
           {loaded ? 'r/' + subName : 'Loading...'}
         </div>
-        <div style={{ fontSize: 12, color: '#8b92a5', marginTop: 4 }}>
+        <div style={{ fontSize: 12, color: '#475569', marginTop: 4 }}>
           Tap to explore leaderboard
         </div>
       </div>
@@ -84,14 +84,15 @@ function Splash() {
           width: 32,
           height: 32,
           borderRadius: 8,
-          background: 'rgba(255,255,255,0.06)',
+          background: 'rgba(255,255,255,0.04)',
+          border: '1px solid rgba(255,255,255,0.06)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           flexShrink: 0,
         }}
       >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8b92a5" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#475569" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
           <polyline points="9 18 15 12 9 6" />
         </svg>
       </div>

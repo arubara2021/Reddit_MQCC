@@ -1,4 +1,3 @@
-// src/server/core/contextEnricher.ts
 import { redis, reddit, context } from '@devvit/web/server';
 import { REDIS_KEYS, TTL } from './constants';
 import { getCached, setCached } from './cache';
@@ -23,6 +22,23 @@ const EMPTY_USER: RawUserResult = {
   isShadowbanned: false,
 };
 
+function toStr(val: unknown, fallback = ''): string {
+  if (typeof val === 'string') return val;
+  if (val && typeof val === 'object') {
+    const obj = val as Record<string, unknown>;
+    if (typeof obj.name === 'string') return obj.name;
+    if (typeof obj.username === 'string') return obj.username;
+    if (typeof obj.displayName === 'string') return obj.displayName;
+  }
+  return fallback;
+}
+
+function safeName(username: unknown): string {
+  const name = toStr(username, '');
+  if (!name || name === '[object Object]') return '';
+  return name;
+}
+
 async function fetchUserFromReddit(username: string): Promise<RawUserResult> {
   const result = { ...EMPTY_USER };
 
@@ -35,34 +51,25 @@ async function fetchUserFromReddit(username: string): Promise<RawUserResult> {
       return result;
     }
 
-    // Parse account age from createdAt
     const createdAt = user.createdAt;
     if (createdAt instanceof Date) {
-      result.accountAgeDays = Math.floor(
-        (Date.now() - createdAt.getTime()) / 86400000
-      );
+      result.accountAgeDays = Math.floor((Date.now() - createdAt.getTime()) / 86400000);
     } else if (typeof createdAt === 'number') {
       const ts = createdAt > 1e12 ? createdAt : createdAt * 1000;
       result.accountAgeDays = Math.floor((Date.now() - ts) / 86400000);
     } else if (typeof createdAt === 'string') {
       const parsed = new Date(createdAt);
       if (!isNaN(parsed.getTime())) {
-        result.accountAgeDays = Math.floor(
-          (Date.now() - parsed.getTime()) / 86400000
-        );
+        result.accountAgeDays = Math.floor((Date.now() - parsed.getTime()) / 86400000);
       }
     }
 
-    // Parse karma
     result.postKarma = user.linkKarma || user.postKarma || 0;
     result.commentKarma = user.commentKarma || 0;
-    result.totalKarma =
-      user.totalKarma || result.postKarma + result.commentKarma;
+    result.totalKarma = user.totalKarma || result.postKarma + result.commentKarma;
 
-    // Parse account status
     if (user.isSuspended || user.is_suspended) result.isSuspended = true;
-    if (user.isShadowbanned || user.is_shadowbanned)
-      result.isShadowbanned = true;
+    if (user.isShadowbanned || user.is_shadowbanned) result.isShadowbanned = true;
 
     log('contextEnricher', 'info', 'User profile fetched', {
       username,
@@ -73,17 +80,10 @@ async function fetchUserFromReddit(username: string): Promise<RawUserResult> {
     return result;
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    log('contextEnricher', 'warn', 'getUserByUsername failed', {
-      username,
-      error: msg,
-    });
+    log('contextEnricher', 'warn', 'getUserByUsername failed', { username, error: msg });
 
     if (msg.includes('suspended')) result.isSuspended = true;
-    if (
-      msg.includes('404') ||
-      msg.includes('not found') ||
-      msg.includes('does not exist')
-    ) {
+    if (msg.includes('404') || msg.includes('not found') || msg.includes('does not exist')) {
       result.isShadowbanned = true;
     }
 
@@ -95,23 +95,16 @@ async function buildContextFromDb(
   username: string,
   userData: RawUserResult
 ): Promise<UserContext> {
-  // Load mod action history
   const actionsKey = REDIS_KEYS.MOD_ACTIONS + context.subredditId;
   const actionsRaw = await redis.get(actionsKey);
-  const allActions: ModActionRecord[] = actionsRaw
-    ? JSON.parse(actionsRaw as string)
-    : [];
+  const allActions: ModActionRecord[] = actionsRaw ? JSON.parse(actionsRaw as string) : [];
   const userActions = allActions.filter(
     (a) => a.targetAuthor.toLowerCase() === username.toLowerCase()
   );
 
-  // Load queue appearance count
-  const appearancesKey =
-    REDIS_KEYS.QUEUE_APPEARANCES + username.toLowerCase();
+  const appearancesKey = REDIS_KEYS.QUEUE_APPEARANCES + username.toLowerCase();
   const appearancesRaw = await redis.get(appearancesKey);
-  const queueAppearances = appearancesRaw
-    ? parseInt(appearancesRaw as string, 10) || 0
-    : 0;
+  const queueAppearances = appearancesRaw ? parseInt(appearancesRaw as string, 10) || 0 : 0;
 
   return {
     username,
@@ -120,14 +113,8 @@ async function buildContextFromDb(
     postKarma: userData.postKarma,
     commentKarma: userData.commentKarma,
     previousActionCount: userActions.length,
-    lastActionType:
-      userActions.length > 0
-        ? userActions[userActions.length - 1].action
-        : null,
-    lastActionTimestamp:
-      userActions.length > 0
-        ? userActions[userActions.length - 1].timestamp
-        : 0,
+    lastActionType: userActions.length > 0 ? userActions[userActions.length - 1].action : null,
+    lastActionTimestamp: userActions.length > 0 ? userActions[userActions.length - 1].timestamp : 0,
     queueAppearances,
     isSuspended: userData.isSuspended,
     isShadowbanned: userData.isShadowbanned,
@@ -135,20 +122,17 @@ async function buildContextFromDb(
   };
 }
 
-export async function getUserContext(username: string): Promise<UserContext> {
-  if (!username || username === '[deleted]') {
-    return buildContextFromDb(username, EMPTY_USER);
+export async function getUserContext(usernameRaw: unknown): Promise<UserContext> {
+  const username = safeName(usernameRaw) || String(usernameRaw || '');
+
+  if (!username || username === '[deleted]' || username === '[object Object]') {
+    return buildContextFromDb(username || '[deleted]', EMPTY_USER);
   }
 
   const cacheKey = REDIS_KEYS.USER_CONTEXT + username.toLowerCase();
   const cached = await getCached<UserContext | null>(cacheKey, null);
 
-  // Use cache only if it has real data
-  if (
-    cached &&
-    cached.accountAgeDays > 0 &&
-    Date.now() - cached.cachedAt < TTL.USER_CONTEXT_MS
-  ) {
+  if (cached && cached.accountAgeDays > 0 && Date.now() - cached.cachedAt < TTL.USER_CONTEXT_MS) {
     log('contextEnricher', 'info', 'Returning cached context', {
       username,
       accountAgeDays: cached.accountAgeDays,
@@ -161,7 +145,7 @@ export async function getUserContext(username: string): Promise<UserContext> {
 
   try {
     await setCached(cacheKey, userContext, TTL.USER_CONTEXT_MS);
-  } catch (e) {
+  } catch {
     log('contextEnricher', 'warn', 'Cache write failed', { username });
   }
 
@@ -176,9 +160,8 @@ export async function getUserContext(username: string): Promise<UserContext> {
   return userContext;
 }
 
-export async function incrementQueueAppearance(
-  username: string
-): Promise<void> {
+export async function incrementQueueAppearance(usernameRaw: unknown): Promise<void> {
+  const username = safeName(usernameRaw);
   if (!username || username === '[deleted]') return;
 
   const key = REDIS_KEYS.QUEUE_APPEARANCES + username.toLowerCase();
@@ -198,12 +181,12 @@ export async function enrichQueueItems(
   const pending: Array<{ lower: string; index: number }> = [];
 
   for (let i = 0; i < items.length; i++) {
-    const authorLower = items[i].authorName.toLowerCase();
+    const authorLower = safeName(items[i].authorName).toLowerCase() || '[deleted]';
     if (seenAuthors.has(authorLower)) {
       results.push(seenAuthors.get(authorLower)!);
     } else {
       results.push({
-        username: items[i].authorName,
+        username: safeName(items[i].authorName) || '[deleted]',
         accountAgeDays: -1,
         totalKarma: -1,
         postKarma: -1,
@@ -226,7 +209,6 @@ export async function enrichQueueItems(
     });
   }
 
-  // Process in batches of 3 to avoid rate limiting
   for (let i = 0; i < pending.length; i += 3) {
     const batch = pending.slice(i, i + 3);
     const resolved = await Promise.allSettled(
