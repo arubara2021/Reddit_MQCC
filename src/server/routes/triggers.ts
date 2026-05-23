@@ -23,34 +23,74 @@ function toStr(val: unknown, fallback = ''): string {
 }
 
 function extractAuthor(body: Record<string, unknown>): string {
-  const post = (body.post || body.comment || body) as Record<string, unknown>;
+  const sources = [
+    body.author,
+    (body.post as Record<string, unknown>)?.author,
+    (body.comment as Record<string, unknown>)?.author,
+  ];
 
-  const direct = toStr(post.author);
-  if (direct) return direct;
-
-  const nested = post.author;
-  if (nested && typeof nested === 'object') {
-    return toStr((nested as Record<string, unknown>).name) ||
-           toStr((nested as Record<string, unknown>).username) || '';
+  for (const src of sources) {
+    const name = toStr(src);
+    if (name && name !== '[object Object]') return name;
   }
 
-  const bodyAuthor = toStr(body.author);
-  if (bodyAuthor) return bodyAuthor;
+  const nested = (body.post as Record<string, unknown>)?.author ??
+                 (body.comment as Record<string, unknown>)?.author ??
+                 body.author;
+
+  if (nested && typeof nested === 'object') {
+    const obj = nested as Record<string, unknown>;
+    const name = toStr(obj.name) || toStr(obj.username) || toStr(obj.displayName);
+    if (name) return name;
+  }
 
   return '';
 }
 
-function extractField(body: Record<string, unknown>, key: string): string {
+function extractId(body: Record<string, unknown>): string {
   const post = (body.post || body.comment || body) as Record<string, unknown>;
-  const val = post[key] ?? body[key];
+  const val = post.id ?? body.id;
+  if (typeof val === 'string') return val;
+  if (typeof val === 'number') return String(val);
+  return '';
+}
+
+function extractTitle(body: Record<string, unknown>): string {
+  const post = (body.post || body) as Record<string, unknown>;
+  const val = post.title ?? body.title;
   return typeof val === 'string' ? val : '';
 }
 
-function extractNumber(body: Record<string, unknown>, key: string): number {
+function extractPermalink(body: Record<string, unknown>): string {
   const post = (body.post || body.comment || body) as Record<string, unknown>;
-  const val = post[key] ?? body[key];
-  if (typeof val === 'number') return val > 1e12 ? val : val * 1000;
+  const val = post.permalink ?? body.permalink;
+  return typeof val === 'string' ? val : '';
+}
+
+function extractPostId(body: Record<string, unknown>): string {
+  const comment = (body.comment || body) as Record<string, unknown>;
+  const val = comment.postId ?? comment.post_id ?? body.postId ?? body.post_id;
+  if (typeof val === 'string') return val;
+  if (typeof val === 'number') return String(val);
+  return '';
+}
+
+function extractTimestamp(body: Record<string, unknown>): number {
+  const post = (body.post || body.comment || body) as Record<string, unknown>;
+  const raw = post.created_utc ?? post.createdAt ?? post.created ??
+              body.created_utc ?? body.createdAt ?? body.created;
+
+  if (typeof raw === 'number') return raw > 1e12 ? raw : raw * 1000;
+  if (typeof raw === 'string') {
+    const parsed = new Date(raw);
+    return isNaN(parsed.getTime()) ? 0 : parsed.getTime();
+  }
+  if (raw instanceof Date) return raw.getTime();
   return 0;
+}
+
+function isDeleted(author: string): boolean {
+  return !author || author === '[deleted]' || author === '[object Object]';
 }
 
 triggers.post('/on-install', async (c) => {
@@ -87,24 +127,32 @@ triggers.post('/on-post-submit', async (c) => {
   try {
     const body = await c.req.json();
 
-    log('triggers', 'info', 'RAW on-post-submit body', {
-      body: JSON.stringify(body).substring(0, 500),
+    log('triggers', 'info', 'RAW on-post-submit', {
+      keys: Object.keys(body),
+      body: JSON.stringify(body).substring(0, 800),
     });
 
     const author = extractAuthor(body);
-    const postId = extractField(body, 'id');
-    const title = extractField(body, 'title');
-    const permalink = extractField(body, 'permalink');
-    const createdAt = extractNumber(body, 'created_utc') || Date.now();
+    const postId = extractId(body);
+    const title = extractTitle(body);
+    const permalink = extractPermalink(body);
+    const createdAt = extractTimestamp(body) || Date.now();
 
-    if (!author || author === '[deleted]' || author === '[object Object]') {
-      log('triggers', 'warn', 'on-post-submit: bad author, skipping', {
-        rawAuthor: JSON.stringify(body.post?.author || body.author),
+    if (isDeleted(author)) {
+      log('triggers', 'warn', 'on-post-submit: invalid author, skipping', {
+        rawAuthor: JSON.stringify(
+          (body.post as Record<string, unknown>)?.author || body.author
+        ),
       });
       return c.json({ ok: true });
     }
 
-    log('triggers', 'info', 'Post submitted', { postId, author, title: title.substring(0, 40) });
+    log('triggers', 'info', 'Post submitted', {
+      postId,
+      author,
+      title: title.substring(0, 40),
+    });
+
     await recordPost(postId, author, title, permalink, createdAt);
 
     return c.json({ ok: true });
@@ -120,14 +168,17 @@ triggers.post('/on-post-delete', async (c) => {
   try {
     const body = await c.req.json();
 
-    log('triggers', 'info', 'RAW on-post-delete body', {
-      body: JSON.stringify(body).substring(0, 500),
+    log('triggers', 'info', 'RAW on-post-delete', {
+      keys: Object.keys(body),
+      body: JSON.stringify(body).substring(0, 800),
     });
 
     const author = extractAuthor(body);
-    const postId = extractField(body, 'id');
+    const postId = extractId(body);
 
-    if (!postId) return c.json({ ok: true });
+    if (!postId) {
+      return c.json({ ok: true });
+    }
 
     log('triggers', 'info', 'Post deleted', { postId, author });
     await removePost(postId, author);
@@ -145,18 +196,21 @@ triggers.post('/on-comment-submit', async (c) => {
   try {
     const body = await c.req.json();
 
-    log('triggers', 'info', 'RAW on-comment-submit body', {
-      body: JSON.stringify(body).substring(0, 500),
+    log('triggers', 'info', 'RAW on-comment-submit', {
+      keys: Object.keys(body),
+      body: JSON.stringify(body).substring(0, 800),
     });
 
     const author = extractAuthor(body);
-    const commentId = extractField(body, 'id');
-    const postId = extractField(body, 'postId') || extractField(body, 'post_id');
-    const createdAt = extractNumber(body, 'created_utc') || Date.now();
+    const commentId = extractId(body);
+    const postId = extractPostId(body);
+    const createdAt = extractTimestamp(body) || Date.now();
 
-    if (!author || author === '[deleted]' || author === '[object Object]') {
-      log('triggers', 'warn', 'on-comment-submit: bad author, skipping', {
-        rawAuthor: JSON.stringify(body.comment?.author || body.author),
+    if (isDeleted(author)) {
+      log('triggers', 'warn', 'on-comment-submit: invalid author, skipping', {
+        rawAuthor: JSON.stringify(
+          (body.comment as Record<string, unknown>)?.author || body.author
+        ),
       });
       return c.json({ ok: true });
     }
@@ -177,14 +231,17 @@ triggers.post('/on-comment-delete', async (c) => {
   try {
     const body = await c.req.json();
 
-    log('triggers', 'info', 'RAW on-comment-delete body', {
-      body: JSON.stringify(body).substring(0, 500),
+    log('triggers', 'info', 'RAW on-comment-delete', {
+      keys: Object.keys(body),
+      body: JSON.stringify(body).substring(0, 800),
     });
 
     const author = extractAuthor(body);
-    const commentId = extractField(body, 'id');
+    const commentId = extractId(body);
 
-    if (!commentId) return c.json({ ok: true });
+    if (!commentId) {
+      return c.json({ ok: true });
+    }
 
     log('triggers', 'info', 'Comment deleted', { commentId, author });
     await removeComment(commentId, author);

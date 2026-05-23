@@ -44,6 +44,8 @@ const RANK_BADGE: Record<number, string> = {
   3: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
 };
 
+const REFRESH_INTERVAL_MS = 30000;
+
 async function copyToClipboard(text: string): Promise<boolean> {
   try {
     await navigator.clipboard.writeText(text);
@@ -119,6 +121,8 @@ export function PublicDashboard({ subredditName }: { subredditName: string }) {
   const [viewerName, setViewerName] = useState<string | null>(null);
   const [copiedTarget, setCopiedTarget] = useState<string | null>(null);
   const [communityData, setCommunityData] = useState<CommunityData | null>(null);
+  const [lastUpdated, setLastUpdated] = useState(0);
+  const fetchingRef = useRef(false);
 
   const handleCopy = useCallback(async (url: string, target: string) => {
     const ok = await copyToClipboard(url);
@@ -129,12 +133,12 @@ export function PublicDashboard({ subredditName }: { subredditName: string }) {
   }, []);
 
   const loadData = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+    if (fetchingRef.current) return;
+    fetchingRef.current = true;
 
     try {
       const initRes = await fetch('/api/init').then((r) => r.json()).catch(() => null);
-      setViewerName(initRes?.username || null);
+      if (initRes?.username) setViewerName(initRes.username);
 
       const res = await fetch('/api/community?subreddit=' + encodeURIComponent(subredditName));
       if (!res.ok) throw new Error('Failed to load community data');
@@ -150,20 +154,33 @@ export function PublicDashboard({ subredditName }: { subredditName: string }) {
         data.karma.length > 0 ||
         data.recentActivity.length > 0;
 
-      if (!hasData) {
+      if (!hasData && !communityData) {
         setError('No community activity yet. Posts and comments will appear here as users engage.');
       } else {
-        setCommunityData(data);
+        if (hasData) setCommunityData(data);
+        setError(null);
       }
+
+      setLastUpdated(Date.now());
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load');
+      if (!communityData) {
+        setError(e instanceof Error ? e.message : 'Failed to load');
+      }
     } finally {
       setLoading(false);
+      fetchingRef.current = false;
     }
-  }, [subredditName]);
+  }, [subredditName, communityData]);
 
   useEffect(() => {
     loadData();
+  }, [loadData]);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      loadData();
+    }, REFRESH_INTERVAL_MS);
+    return () => clearInterval(timer);
   }, [loadData]);
 
   useEffect(() => {
@@ -236,7 +253,7 @@ export function PublicDashboard({ subredditName }: { subredditName: string }) {
     );
   }
 
-  if (error) {
+  if (error && !communityData) {
     return (
       <div className="public-root">
         <div className="public-container" style={{ paddingTop: 80 }}>
@@ -306,6 +323,24 @@ export function PublicDashboard({ subredditName }: { subredditName: string }) {
           animation: pubFadeIn 0.2s ease forwards;
           box-shadow: 0 4px 16px rgba(0,0,0,0.5);
         }
+        .pub-refresh-btn {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          width: 28px;
+          height: 28px;
+          border-radius: var(--radius-md);
+          background: var(--pub-accent-muted);
+          border: 1px solid var(--pub-accent-border);
+          color: var(--pub-accent-bright);
+          cursor: pointer;
+          transition: all 0.15s ease;
+          flex-shrink: 0;
+        }
+        .pub-refresh-btn:hover {
+          background: rgba(139, 92, 246, 0.15);
+          border-color: var(--pub-border-active);
+        }
       `}</style>
 
       <div className="public-container">
@@ -343,34 +378,54 @@ export function PublicDashboard({ subredditName }: { subredditName: string }) {
         </div>
 
         <div className="public-toolbar">
-          <div className="public-toolbar-count">{getTabCountLabel()}</div>
-          <div className="public-dropdown">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+            <div className="public-toolbar-count">{getTabCountLabel()}</div>
+            {lastUpdated > 0 && (
+              <span style={{ fontSize: 9, color: 'var(--pub-text-muted)', fontFamily: 'var(--font-mono)' }}>
+                {Math.round((Date.now() - lastUpdated) / 1000)}s ago
+              </span>
+            )}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+            <div className="public-dropdown">
+              <button
+                className="public-dropdown-btn"
+                onClick={(e) => { e.stopPropagation(); setShowDropdown(!showDropdown); }}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10" />
+                  <polyline points="12 6 12 12 16 14" />
+                </svg>
+                {activeRangeLabel}
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </button>
+              {showDropdown && (
+                <div className="public-dropdown-menu" onClick={(e) => e.stopPropagation()}>
+                  {TIME_RANGES.map((t) => (
+                    <button
+                      key={t.id}
+                      className={'public-dropdown-item' + (timeRange === t.id ? ' public-dropdown-item-active' : '')}
+                      onClick={() => { setTimeRange(t.id); setShowDropdown(false); }}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
             <button
-              className="public-dropdown-btn"
-              onClick={(e) => { e.stopPropagation(); setShowDropdown(!showDropdown); }}
+              className="pub-refresh-btn"
+              onClick={loadData}
+              title="Refresh community data"
             >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10" />
-                <polyline points="12 6 12 12 16 14" />
-              </svg>
-              {activeRangeLabel}
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="6 9 12 15 18 9" />
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="23 4 23 10 17 10" />
+                <polyline points="1 20 1 14 7 14" />
+                <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" />
               </svg>
             </button>
-            {showDropdown && (
-              <div className="public-dropdown-menu" onClick={(e) => e.stopPropagation()}>
-                {TIME_RANGES.map((t) => (
-                  <button
-                    key={t.id}
-                    className={'public-dropdown-item' + (timeRange === t.id ? ' public-dropdown-item-active' : '')}
-                    onClick={() => { setTimeRange(t.id); setShowDropdown(false); }}
-                  >
-                    {t.label}
-                  </button>
-                ))}
-              </div>
-            )}
           </div>
         </div>
 

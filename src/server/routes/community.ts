@@ -75,13 +75,19 @@ function buildFromQueueItems(
 
   const postsByAuthor = new Map<string, number>();
   const commentsByAuthor = new Map<string, number>();
+  const totalByAuthor = new Map<string, number>();
   const activeAuthors = new Set<string>();
 
   for (const item of unique) {
     const a = item.authorName.toLowerCase();
     activeAuthors.add(a);
-    postsByAuthor.set(a, (postsByAuthor.get(a) || 0) + 1);
-    commentsByAuthor.set(a, (commentsByAuthor.get(a) || 0) + 1);
+    totalByAuthor.set(a, (totalByAuthor.get(a) || 0) + 1);
+
+    if (item.type === 'comment') {
+      commentsByAuthor.set(a, (commentsByAuthor.get(a) || 0) + 1);
+    } else {
+      postsByAuthor.set(a, (postsByAuthor.get(a) || 0) + 1);
+    }
   }
 
   const sorted = [...unique].sort((a, b) => b.createdAt - a.createdAt);
@@ -109,9 +115,9 @@ function buildFromQueueItems(
 
   return {
     stats: { active: activeAuthors.size, posts: n, health },
-    contributors: sortSlice(postsByAuthor),
-    commenters: sortSlice(commentsByAuthor),
-    karma: sortSlice(postsByAuthor),
+    contributors: sortSlice(postsByAuthor.size > 0 ? postsByAuthor : totalByAuthor),
+    commenters: sortSlice(commentsByAuthor.size > 0 ? commentsByAuthor : totalByAuthor),
+    karma: sortSlice(totalByAuthor),
     trendingPosts,
     recentActivity,
   };

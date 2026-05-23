@@ -34,13 +34,16 @@ interface LeaderboardData {
   karma: LeaderboardEntry[];
 }
 
+const DAY_NAMES = [
+  'Monday', 'Tuesday', 'Wednesday', 'Thursday',
+  'Friday', 'Saturday', 'Sunday',
+];
+
 export async function logActivity(record: ModActionRecord): Promise<void> {
   try {
     const key = REDIS_KEYS.MOD_ACTIONS + context.subredditId;
     const raw = await redis.get(key);
-    const actions: ModActionRecord[] = raw
-      ? JSON.parse(raw as string)
-      : [];
+    const actions: ModActionRecord[] = raw ? JSON.parse(raw as string) : [];
 
     actions.push(record);
     const trimmed = actions.slice(-500);
@@ -62,18 +65,21 @@ export async function getWorkloadData(): Promise<WorkloadData> {
 
   const key = REDIS_KEYS.MOD_ACTIONS + context.subredditId;
   const raw = await redis.get(key);
-  const actions: ModActionRecord[] = raw
-    ? JSON.parse(raw as string)
-    : [];
+  const actions: ModActionRecord[] = raw ? JSON.parse(raw as string) : [];
 
   const actionsByMod: Record<string, number> = {};
   const actionsByType: Record<string, number> = {};
   const actionsByHour: Record<string, number> = {};
   const actionsByDay: Record<string, number> = {};
+  const actionsByDayHour: Record<string, Record<number, number>> = {};
   const userActionCounts: Record<
     string,
     { count: number; lastTimestamp: number }
   > = {};
+
+  for (const day of DAY_NAMES) {
+    actionsByDayHour[day] = {};
+  }
 
   for (const action of actions) {
     const mod = action.modName || 'unknown';
@@ -85,12 +91,11 @@ export async function getWorkloadData(): Promise<WorkloadData> {
     const hour = date.getUTCHours();
     actionsByHour[String(hour)] = (actionsByHour[String(hour)] || 0) + 1;
 
-    const days = [
-      'Sunday', 'Monday', 'Tuesday', 'Wednesday',
-      'Thursday', 'Friday', 'Saturday',
-    ];
-    const day = days[date.getUTCDay()];
+    const day = DAY_NAMES[date.getUTCDay()];
     actionsByDay[day] = (actionsByDay[day] || 0) + 1;
+
+    if (!actionsByDayHour[day]) actionsByDayHour[day] = {};
+    actionsByDayHour[day][hour] = (actionsByDayHour[day][hour] || 0) + 1;
 
     if (action.targetAuthor) {
       const authorLower = action.targetAuthor.toLowerCase();
@@ -108,15 +113,10 @@ export async function getWorkloadData(): Promise<WorkloadData> {
   }
 
   const coverageGaps: WorkloadData['coverageGaps'] = [];
-  const allDays = [
-    'Monday', 'Tuesday', 'Wednesday', 'Thursday',
-    'Friday', 'Saturday', 'Sunday',
-  ];
 
-  for (const day of allDays) {
+  for (const day of DAY_NAMES) {
     for (let hour = 0; hour < 24; hour++) {
-      const key = String(hour);
-      const count = actionsByHour[key] || 0;
+      const count = actionsByDayHour[day]?.[hour] || 0;
       if (count === 0) {
         coverageGaps.push({ day, hour, actionCount: 0 });
       }
@@ -156,9 +156,7 @@ export async function getLeaderboardData(
 
   const key = REDIS_KEYS.MOD_ACTIONS + context.subredditId;
   const raw = await redis.get(key);
-  const actions: ModActionRecord[] = raw
-    ? JSON.parse(raw as string)
-    : [];
+  const actions: ModActionRecord[] = raw ? JSON.parse(raw as string) : [];
 
   const now = Date.now();
   let cutoff = 0;
