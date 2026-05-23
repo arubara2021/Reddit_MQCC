@@ -123,6 +123,7 @@ export function PublicDashboard({ subredditName }: { subredditName: string }) {
   const [communityData, setCommunityData] = useState<CommunityData | null>(null);
   const [lastUpdated, setLastUpdated] = useState(0);
   const fetchingRef = useRef(false);
+  const hasFetchedRef = useRef(false);
 
   const handleCopy = useCallback(async (url: string, target: string) => {
     const ok = await copyToClipboard(url);
@@ -132,14 +133,22 @@ export function PublicDashboard({ subredditName }: { subredditName: string }) {
     }
   }, []);
 
+  // Load viewer identity ONCE on mount
+  useEffect(() => {
+    fetch('/api/init')
+      .then((r) => r.json())
+      .then((data) => {
+        if (data?.username) setViewerName(data.username);
+      })
+      .catch(() => {});
+  }, []);
+
+  // Stable loadData — no state dependencies that change frequently
   const loadData = useCallback(async () => {
     if (fetchingRef.current) return;
     fetchingRef.current = true;
 
     try {
-      const initRes = await fetch('/api/init').then((r) => r.json()).catch(() => null);
-      if (initRes?.username) setViewerName(initRes.username);
-
       const res = await fetch('/api/community?subreddit=' + encodeURIComponent(subredditName));
       if (!res.ok) throw new Error('Failed to load community data');
 
@@ -154,34 +163,38 @@ export function PublicDashboard({ subredditName }: { subredditName: string }) {
         data.karma.length > 0 ||
         data.recentActivity.length > 0;
 
-      if (!hasData && !communityData) {
-        setError('No community activity yet. Posts and comments will appear here as users engage.');
-      } else {
-        if (hasData) setCommunityData(data);
+      if (hasData) {
+        setCommunityData(data);
         setError(null);
+      } else if (!hasFetchedRef.current) {
+        setError('No community activity yet. Posts and comments will appear here as users engage.');
       }
+      // If already had data and new fetch returns empty, keep showing old data
 
       setLastUpdated(Date.now());
+      hasFetchedRef.current = true;
     } catch (e) {
-      if (!communityData) {
+      if (!hasFetchedRef.current) {
         setError(e instanceof Error ? e.message : 'Failed to load');
       }
     } finally {
       setLoading(false);
       fetchingRef.current = false;
     }
-  }, [subredditName, communityData]);
+  }, [subredditName]); // Only depends on subredditName, NOT communityData
 
+  // Initial fetch on mount
   useEffect(() => {
     loadData();
   }, [loadData]);
 
+  // Polling interval — separate effect, stable
   useEffect(() => {
     const timer = setInterval(() => {
       loadData();
     }, REFRESH_INTERVAL_MS);
     return () => clearInterval(timer);
-  }, [loadData]);
+  }, [loadData]); // loadData is stable, so this effect runs once
 
   useEffect(() => {
     if (!showDropdown) return;
