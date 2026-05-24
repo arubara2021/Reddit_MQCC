@@ -14,7 +14,7 @@ A real-time moderation dashboard for Reddit built on the Devvit platform. MQCC r
 
 ## Demo
 
-[![MQCC Demo Video](https://img.shields.io/badge/Watch_Demo-FF0000?style=for-the-badge&logo=youtube&logoColor=white)](https://youtu.be/_-0PLfCFPYo)
+[![MQCC Demo Video](https://img.shields.io/badge/Watch_Demo-FF0000?style=for-the-badge&logo=youtube&logoColor=white)](https://youtu.be/Avb5u035dDo)
 
 ## Table of Contents
 
