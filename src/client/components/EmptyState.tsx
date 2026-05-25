@@ -13,14 +13,14 @@ export const EmptyState = memo(function EmptyState({
     <div
       className="card animate-fade-in"
       style={{
-        padding: '56px var(--space-6)',
+        padding: '48px var(--space-6)',
         textAlign: 'center',
       }}
     >
       <div
         style={{
-          width: 52,
-          height: 52,
+          width: 56,
+          height: 56,
           borderRadius: 'var(--radius-xl)',
           background: 'var(--success-bg)',
           border: '1px solid var(--success-border)',
@@ -29,11 +29,12 @@ export const EmptyState = memo(function EmptyState({
           justifyContent: 'center',
           margin: '0 auto var(--space-4)',
           boxShadow: '0 0 24px rgba(16, 185, 129, 0.08)',
+          position: 'relative',
         }}
       >
         <svg
-          width="22"
-          height="22"
+          width="24"
+          height="24"
           viewBox="0 0 24 24"
           fill="none"
           stroke="var(--success)"
@@ -41,14 +42,32 @@ export const EmptyState = memo(function EmptyState({
           strokeLinecap="round"
           strokeLinejoin="round"
         >
-          <path d="M22 11.08V12a10 10 0 11-5.93-9.14" />
-          <polyline points="22 4 12 14.01 9 11.01" />
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+        </svg>
+        <svg
+          width="12"
+          height="12"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="var(--success)"
+          strokeWidth={3}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          style={{
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            marginTop: 1,
+          }}
+        >
+          <polyline points="20 6 9 17 4 12" />
         </svg>
       </div>
 
       <h3
         style={{
-          fontSize: 14,
+          fontSize: 15,
           fontWeight: 700,
           color: 'var(--text-primary)',
           marginBottom: 'var(--space-2)',

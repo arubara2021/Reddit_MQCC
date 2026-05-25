@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { timeAgo } from '../utils/time';
 
 type LeaderboardEntry = { name: string; score: number };
 type LeaderboardTab = 'contributors' | 'comments' | 'karma';
@@ -67,20 +68,6 @@ async function copyToClipboard(text: string): Promise<boolean> {
   }
 }
 
-function timeAgo(ts: number): string {
-  if (!ts) return '';
-  const diff = Date.now() - ts;
-  if (diff < 0) return 'just now';
-  const secs = Math.floor(diff / 1000);
-  if (secs < 60) return secs + 's ago';
-  const mins = Math.floor(secs / 60);
-  if (mins < 60) return mins + 'm ago';
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return hrs + 'h ago';
-  const days = Math.floor(hrs / 24);
-  return days + 'd ago';
-}
-
 function AnimatedNumber({ value, duration = 1200 }: { value: number; duration?: number }) {
   const [display, setDisplay] = useState(0);
   const prevRef = useRef(0);
@@ -133,7 +120,6 @@ export function PublicDashboard({ subredditName }: { subredditName: string }) {
     }
   }, []);
 
-  // Load viewer identity ONCE on mount
   useEffect(() => {
     fetch('/api/init')
       .then((r) => r.json())
@@ -143,7 +129,6 @@ export function PublicDashboard({ subredditName }: { subredditName: string }) {
       .catch(() => {});
   }, []);
 
-  // Stable loadData — no state dependencies that change frequently
   const loadData = useCallback(async () => {
     if (fetchingRef.current) return;
     fetchingRef.current = true;
@@ -169,7 +154,6 @@ export function PublicDashboard({ subredditName }: { subredditName: string }) {
       } else if (!hasFetchedRef.current) {
         setError('No community activity yet. Posts and comments will appear here as users engage.');
       }
-      // If already had data and new fetch returns empty, keep showing old data
 
       setLastUpdated(Date.now());
       hasFetchedRef.current = true;
@@ -181,20 +165,18 @@ export function PublicDashboard({ subredditName }: { subredditName: string }) {
       setLoading(false);
       fetchingRef.current = false;
     }
-  }, [subredditName]); // Only depends on subredditName, NOT communityData
+  }, [subredditName]);
 
-  // Initial fetch on mount
   useEffect(() => {
     loadData();
   }, [loadData]);
 
-  // Polling interval — separate effect, stable
   useEffect(() => {
     const timer = setInterval(() => {
       loadData();
     }, REFRESH_INTERVAL_MS);
     return () => clearInterval(timer);
-  }, [loadData]); // loadData is stable, so this effect runs once
+  }, [loadData]);
 
   useEffect(() => {
     if (!showDropdown) return;

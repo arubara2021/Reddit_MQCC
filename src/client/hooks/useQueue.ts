@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { EnrichedQueueItem, GroupedQueueItem, Anomaly, PatternResult } from '../../shared/api';
 
+const FETCH_TIMEOUT_MS = 10000;
+
 interface QueueState {
   items: EnrichedQueueItem[];
   groups: GroupedQueueItem[];
@@ -9,6 +11,7 @@ interface QueueState {
   error: string | null;
   anomalies: Anomaly[];
   patterns: PatternResult | null;
+  connectionStatus: 'connected' | 'slow' | 'disconnected';
 }
 
 const INITIAL_STATE: QueueState = {
@@ -19,21 +22,49 @@ const INITIAL_STATE: QueueState = {
   error: null,
   anomalies: [],
   patterns: null,
+  connectionStatus: 'connected',
 };
 
 export function useQueue(autoRefresh: boolean, intervalMs: number) {
   const [state, setState] = useState<QueueState>(INITIAL_STATE);
   const mountedRef = useRef(true);
   const fetchingRef = useRef(false);
+  const abortRef = useRef<AbortController | null>(null);
+  const slowTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const successCountRef = useRef(0);
 
   const fetchQueue = useCallback(async () => {
     if (fetchingRef.current) return;
     fetchingRef.current = true;
 
+    if (abortRef.current) {
+      abortRef.current.abort();
+    }
+
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     try {
       setState((prev) => ({ ...prev, loading: true, error: null }));
 
-      const res = await fetch('/api/queue');
+      slowTimerRef.current = setTimeout(() => {
+        if (mountedRef.current) {
+          setState((prev) =>
+            prev.loading ? { ...prev, connectionStatus: 'slow' } : prev
+          );
+        }
+      }, 5000);
+
+      const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
+      const res = await fetch('/api/queue', { signal: controller.signal });
+
+      clearTimeout(timeoutId);
+
+      if (slowTimerRef.current) {
+        clearTimeout(slowTimerRef.current);
+        slowTimerRef.current = null;
+      }
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -46,6 +77,8 @@ export function useQueue(autoRefresh: boolean, intervalMs: number) {
 
       if (!mountedRef.current) return;
 
+      successCountRef.current++;
+
       setState({
         items: data.items || [],
         groups: data.groups || [],
@@ -54,17 +87,37 @@ export function useQueue(autoRefresh: boolean, intervalMs: number) {
         error: null,
         anomalies: data.anomalies || [],
         patterns: data.patterns || null,
+        connectionStatus: 'connected',
       });
     } catch (e) {
       if (!mountedRef.current) return;
 
-      setState((prev) => ({
-        ...prev,
-        loading: false,
-        error: e instanceof Error ? e.message : 'Unknown error',
-      }));
+      if (slowTimerRef.current) {
+        clearTimeout(slowTimerRef.current);
+        slowTimerRef.current = null;
+      }
+
+      if (e instanceof DOMException && e.name === 'AbortError') {
+        setState((prev) => ({
+          ...prev,
+          loading: false,
+          error: 'Request timed out. The server may be slow.',
+          connectionStatus: 'disconnected',
+        }));
+      } else {
+        setState((prev) => ({
+          ...prev,
+          loading: false,
+          error: e instanceof Error ? e.message : 'Unknown error',
+          connectionStatus:
+            successCountRef.current > 0
+              ? prev.connectionStatus
+              : 'disconnected',
+        }));
+      }
     } finally {
       fetchingRef.current = false;
+      abortRef.current = null;
     }
   }, []);
 
@@ -74,6 +127,12 @@ export function useQueue(autoRefresh: boolean, intervalMs: number) {
 
     return () => {
       mountedRef.current = false;
+      if (abortRef.current) {
+        abortRef.current.abort();
+      }
+      if (slowTimerRef.current) {
+        clearTimeout(slowTimerRef.current);
+      }
     };
   }, [fetchQueue]);
 

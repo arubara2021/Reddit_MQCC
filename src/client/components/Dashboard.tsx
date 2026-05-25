@@ -1,4 +1,4 @@
-import React,{ useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 
 import type { EnrichedQueueItem } from '../../shared/api';
 import { useQueue } from '../hooks/useQueue';
@@ -7,7 +7,6 @@ import { PriorityQueue } from './PriorityQueue';
 import { BulkActionBar } from './BulkActionBar';
 import { AlertBanner } from './AlertBanner';
 import { EmptyState } from './EmptyState';
-import { LoadingState } from './LoadingState';
 import { ConfirmDialog } from './ConfirmDialog';
 import { DetailModal } from './DetailModal';
 import { WorkloadTab } from './WorkloadTab';
@@ -18,11 +17,108 @@ type TabId = 'queue' | 'workload' | 'alerts' | 'settings';
 type FilterId = 'all' | 'posts' | 'comments' | 'critical' | 'high';
 type SortBy = 'priority' | 'newest' | 'oldest';
 
+function StatSkeleton() {
+  return (
+    <div className="skeleton-stat">
+      <div className="skeleton skeleton-text" style={{ width: 32, height: 20 }} />
+      <div className="skeleton skeleton-text-sm" style={{ width: 40, marginTop: 4 }} />
+    </div>
+  );
+}
+
+function QueueRowSkeleton() {
+  return (
+    <div className="skeleton-row">
+      <div className="skeleton skeleton-dot" />
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div className="skeleton skeleton-badge" />
+          <div className="skeleton skeleton-text" style={{ width: 70 }} />
+          <div className="skeleton skeleton-text" style={{ width: 50 }} />
+          <div className="skeleton skeleton-text" style={{ width: 30, marginLeft: 'auto' }} />
+        </div>
+        <div className="skeleton skeleton-text" style={{ width: '80%' }} />
+        <div style={{ display: 'flex', gap: 6, marginTop: 2 }}>
+          <div className="skeleton skeleton-btn" />
+          <div className="skeleton skeleton-btn" />
+          <div className="skeleton skeleton-btn" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function InitSkeleton() {
+  return (
+    <div className="mod-root">
+      <div className="mod-header-sticky">
+        <div className="mod-container">
+          <div className="mod-header-row">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div className="skeleton" style={{ width: 32, height: 32, borderRadius: 'var(--radius-md)' }} />
+              <div>
+                <div className="skeleton skeleton-text" style={{ width: 60, height: 16 }} />
+                <div className="skeleton skeleton-text-sm" style={{ width: 120, marginTop: 4 }} />
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <div className="skeleton" style={{ width: 60, height: 28, borderRadius: 'var(--radius-md)' }} />
+              <div className="skeleton" style={{ width: 70, height: 28, borderRadius: 'var(--radius-md)' }} />
+            </div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, padding: '8px 0 12px' }}>
+            <StatSkeleton />
+            <StatSkeleton />
+            <StatSkeleton />
+            <StatSkeleton />
+          </div>
+          <div style={{ display: 'flex', gap: 8, borderBottom: '1px solid var(--border-subtle)', paddingBottom: 8 }}>
+            <div className="skeleton skeleton-text" style={{ width: 50, height: 28 }} />
+            <div className="skeleton skeleton-text" style={{ width: 60, height: 28 }} />
+            <div className="skeleton skeleton-text" style={{ width: 50, height: 28 }} />
+            <div className="skeleton skeleton-text" style={{ width: 55, height: 28 }} />
+          </div>
+        </div>
+      </div>
+      <div className="mod-container mod-content">
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <QueueRowSkeleton />
+          <QueueRowSkeleton />
+          <QueueRowSkeleton />
+          <QueueRowSkeleton />
+          <QueueRowSkeleton />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function QueueSkeleton() {
+  return (
+    <div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 16 }}>
+        <StatSkeleton />
+        <StatSkeleton />
+        <StatSkeleton />
+        <StatSkeleton />
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column' }}>
+        <QueueRowSkeleton />
+        <QueueRowSkeleton />
+        <QueueRowSkeleton />
+        <QueueRowSkeleton />
+        <QueueRowSkeleton />
+      </div>
+    </div>
+  );
+}
+
 export function Dashboard() {
   const [isMod, setIsMod] = useState(false);
   const [subredditName, setSubredditName] = useState('unknown');
   const [initDone, setInitDone] = useState(false);
   const [viewMode, setViewMode] = useState<'mod' | 'public'>('mod');
+  const [loadTimeout, setLoadTimeout] = useState(false);
 
   const { settings, updateSettings } = useSettings();
   const { items, groups, lastUpdated, loading, error, refresh, anomalies, patterns } = useQueue(
@@ -63,6 +159,16 @@ export function Dashboard() {
         setInitDone(true);
       });
   }, []);
+
+  useEffect(() => {
+    if (!loading) {
+      setLoadTimeout(false);
+      return;
+    }
+    setLoadTimeout(false);
+    const timer = setTimeout(() => setLoadTimeout(true), 10000);
+    return () => clearTimeout(timer);
+  }, [loading]);
 
   const showToast = useCallback((msg: string, type: 'success' | 'error' | 'info' = 'info') => {
     setToast({ msg, type });
@@ -274,11 +380,7 @@ export function Dashboard() {
   const selectedCount = selectedIds.size;
 
   if (!initDone) {
-    return (
-      <div className="mod-root mod-loading">
-        <LoadingState message="Loading..." />
-      </div>
-    );
+    return <InitSkeleton />;
   }
 
   if (!isMod) {
@@ -345,7 +447,7 @@ export function Dashboard() {
 
   const selectStyle: React.CSSProperties = {
     fontSize: 11,
-    padding: '5px 24px 5px 8px',
+    padding: '5px 26px 5px 8px',
     background: 'var(--bg-input)',
     border: '1px solid var(--border-default)',
     borderRadius: 'var(--radius-md)',
@@ -355,6 +457,7 @@ export function Dashboard() {
     cursor: 'pointer',
     flexShrink: 0,
     transition: 'border-color var(--duration-fast) ease',
+    minWidth: 0,
   };
 
   return (
@@ -466,13 +569,14 @@ export function Dashboard() {
               display: 'flex',
               alignItems: 'center',
               gap: 'var(--space-2)',
+              rowGap: 'var(--space-2)',
               marginBottom: 'var(--space-3)',
               flexWrap: 'wrap',
             }}>
               <select
                 value={activeFilter}
                 onChange={(e) => setActiveFilter(e.target.value as FilterId)}
-                style={selectStyle}
+                style={{ ...selectStyle, flex: '0 0 auto' }}
               >
                 <option value="all">All ({stats.total})</option>
                 <option value="posts">Posts ({stats.posts})</option>
@@ -484,14 +588,14 @@ export function Dashboard() {
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as SortBy)}
-                style={selectStyle}
+                style={{ ...selectStyle, flex: '0 0 auto' }}
               >
                 <option value="priority">Priority</option>
                 <option value="newest">Newest</option>
                 <option value="oldest">Oldest</option>
               </select>
 
-              <div style={{ position: 'relative', flex: 1, minWidth: 80 }}>
+              <div style={{ position: 'relative', flex: '1 1 100px', minWidth: 80 }}>
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}>
                   <circle cx="11" cy="11" r="8" />
                   <line x1="21" y1="21" x2="16.65" y2="16.65" />
@@ -535,6 +639,25 @@ export function Dashboard() {
               </div>
             )}
 
+            {loadTimeout && loading && (
+              <div style={{
+                background: 'var(--high-bg)',
+                border: '1px solid var(--high-border)',
+                borderRadius: 'var(--radius-lg)',
+                padding: 'var(--space-3) var(--space-4)',
+                marginBottom: 'var(--space-3)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 'var(--space-3)',
+              }}>
+                <p style={{ fontSize: 12, color: 'var(--high)', fontWeight: 500 }}>Loading is taking longer than expected.</p>
+                <button className="btn-ghost" onClick={refresh} style={{ fontSize: 10, padding: '4px 10px', flexShrink: 0 }}>
+                  Retry
+                </button>
+              </div>
+            )}
+
             {anomalies.length > 0 && (
               <div style={{ marginBottom: 'var(--space-2)' }}>
                 <AlertBanner anomalies={anomalies} />
@@ -548,7 +671,7 @@ export function Dashboard() {
             )}
 
             {loading && items.length === 0 ? (
-              <LoadingState message="Loading queue..." />
+              <QueueSkeleton />
             ) : filteredItems.length === 0 ? (
               <EmptyState
                 title={authorFilter ? 'No matches for "' + authorFilter + '"' : 'Queue is clear'}

@@ -40,7 +40,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
             justifyContent: 'center',
             background: 'var(--bg-base, #08090d)',
             color: 'var(--text-primary, #f1f5f9)',
-            fontFamily: "var(--font-sans, 'Inter', -apple-system, sans-serif)",
+            fontFamily: "var(--font-display, 'Space Grotesk', 'Inter', -apple-system, sans-serif)",
             padding: 24,
           }}
         >
@@ -49,9 +49,9 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
               style={{
                 width: 52,
                 height: 52,
-                borderRadius: 14,
-                background: 'rgba(244, 63, 94, 0.08)',
-                border: '1px solid rgba(244, 63, 94, 0.2)',
+                borderRadius: 'var(--radius-xl, 12px)',
+                background: 'var(--critical-bg, rgba(244, 63, 94, 0.08))',
+                border: '1px solid var(--critical-border, rgba(244, 63, 94, 0.2))',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -64,7 +64,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
                 height="22"
                 viewBox="0 0 24 24"
                 fill="none"
-                stroke="#f43f5e"
+                stroke="var(--critical, #f43f5e)"
                 strokeWidth={2}
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -91,9 +91,10 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
             <p
               style={{
                 fontSize: 12,
-                color: 'var(--text-muted, #475569)',
+                color: 'var(--text-muted, #52525b)',
                 lineHeight: 1.6,
                 marginBottom: 24,
+                fontFamily: "var(--font-sans, 'Inter', -apple-system, sans-serif)",
               }}
             >
               The dashboard encountered an unexpected error. Reloading the page should fix it.
@@ -102,9 +103,9 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
             {this.state.error && (
               <div
                 style={{
-                  background: 'rgba(244, 63, 94, 0.06)',
-                  border: '1px solid rgba(244, 63, 94, 0.15)',
-                  borderRadius: 8,
+                  background: 'var(--critical-bg, rgba(244, 63, 94, 0.06))',
+                  border: '1px solid var(--critical-border, rgba(244, 63, 94, 0.15))',
+                  borderRadius: 'var(--radius-lg, 8px)',
                   padding: '12px 16px',
                   marginBottom: 20,
                   textAlign: 'left',
@@ -113,10 +114,11 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
                 <code
                   style={{
                     fontSize: 11,
-                    color: '#fda4af',
+                    color: 'var(--critical, #f43f5e)',
                     fontFamily: "var(--font-mono, 'JetBrains Mono', monospace)",
                     wordBreak: 'break-all',
                     lineHeight: 1.5,
+                    opacity: 0.8,
                   }}
                 >
                   {this.state.error.message}
@@ -134,12 +136,12 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
                 fontWeight: 600,
                 fontSize: 12,
                 padding: '10px 24px',
-                borderRadius: 8,
-                background: 'var(--accent, #3b82f6)',
+                borderRadius: 'var(--radius-lg, 8px)',
+                background: 'var(--accent, #8b5cf6)',
                 color: 'white',
                 border: 'none',
                 cursor: 'pointer',
-                boxShadow: '0 2px 8px rgba(59, 130, 246, 0.25)',
+                boxShadow: '0 2px 8px var(--accent-glow, rgba(139, 92, 246, 0.25))',
                 transition: 'all 0.15s ease',
               }}
             >

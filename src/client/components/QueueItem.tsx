@@ -38,6 +38,7 @@ function PriorityDot({ level }: { level: string }) {
         display: 'inline-block',
         boxShadow: isCritical ? '0 0 6px ' + color : 'none',
         animation: isCritical ? 'pulseGlow 2s ease infinite' : 'none',
+        willChange: isCritical ? 'box-shadow, opacity' : 'auto',
       }}
     />
   );
@@ -109,9 +110,10 @@ export const QueueItem = memo(function QueueItem({
       style={{
         padding: compact ? 'var(--space-2) var(--space-3)' : 'var(--space-3) var(--space-4)',
         opacity: isHandled ? 0.5 : 1,
-        transition: 'all 0.3s ease',
+        transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
         position: 'relative',
-        borderLeftColor: isHandled ? borderColor : borderColor,
+        borderLeftColor: borderColor,
+        willChange: 'transform, opacity',
       }}
     >
       {isHandled && (
@@ -127,6 +129,7 @@ export const QueueItem = memo(function QueueItem({
               handledAction === 'approve' ? 'var(--success)' :
               handledAction === 'ban' ? 'var(--high)' :
               'var(--critical)',
+            transition: 'background 0.2s ease',
           }}
         />
       )}

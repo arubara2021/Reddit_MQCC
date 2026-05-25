@@ -16,8 +16,10 @@ import {
   removeItem,
   lockItem,
   banUser,
+  unbanUser,
   removeAndBan,
   getDurationOptions,
+  getBannedUsers,
 } from '../core/modActions';
 import { deleteCached } from '../core/cache';
 import { REDIS_KEYS } from '../core/constants';
@@ -332,6 +334,18 @@ api.get('/leaderboard', async (c) => {
   }
 });
 
+api.get('/banned', async (c) => {
+  try {
+    const banned = await getBannedUsers();
+    return c.json({ banned });
+  } catch (e) {
+    log('api', 'error', 'Banned users fetch failed', {
+      error: e instanceof Error ? e.message : String(e),
+    });
+    return c.json({ banned: [] });
+  }
+});
+
 api.get('/settings', async (c) => {
   try {
     const settings = await getSettings();
@@ -395,6 +409,7 @@ api.post('/cleanup', async (c) => {
       REDIS_KEYS.SETUP_COMPLETE + subredditId,
       REDIS_KEYS.LEADERBOARD + subredditId,
       REDIS_KEYS.LEADERBOARD + 'seeded:' + subredditId,
+      'mqcc:banned:' + subredditId,
     ];
 
     let cleared = 0;
@@ -592,6 +607,46 @@ api.post('/action/ban', async (c) => {
   }
 });
 
+api.post('/action/unban', async (c) => {
+  try {
+    const body = await c.req.json();
+    const { username } = body;
+
+    if (!username) {
+      return c.json({ message: 'Missing username' }, 400);
+    }
+
+    try {
+      const rateCheck = await checkActionRateLimit('unban');
+      if (!rateCheck.allowed) {
+        return c.json({ message: 'Rate limit exceeded. Try again later.' }, 429);
+      }
+    } catch (rateErr) {
+      log('api', 'warn', 'Rate limit check failed for unban', {
+        error: rateErr instanceof Error ? rateErr.message : String(rateErr),
+      });
+    }
+
+    log('api', 'info', 'Unbanning user', { username });
+
+    const result = await unbanUser(username);
+
+    if (result.success) {
+      await clearQueueCache();
+    }
+
+    return c.json({
+      success: result.success,
+      message: result.message,
+    });
+  } catch (e) {
+    log('api', 'error', 'Unban failed', {
+      error: e instanceof Error ? e.message : String(e),
+    });
+    return c.json({ success: false, message: 'Unban failed' });
+  }
+});
+
 api.post('/action/removeAndBan', async (c) => {
   try {
     const body = await c.req.json();
@@ -692,6 +747,9 @@ api.post('/action/bulk', async (c) => {
               reason || 'Coordinated spam via MQCC',
               durationDays
             );
+            break;
+          case 'unban':
+            result = await unbanUser(item.authorName);
             break;
           default:
             result = {

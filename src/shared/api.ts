@@ -1,5 +1,3 @@
-// FILE 7: src/shared/api.ts
-
 export interface RawQueueItem {
   id: string;
   fullname: string;
@@ -143,4 +141,13 @@ export interface AppSettings {
   groupSpamRings: boolean;
   enableAlerts: boolean;
   compactMode: boolean;
+}
+
+export interface BannedUserRecord {
+  username: string;
+  reason: string;
+  durationDays: number;
+  bannedBy: string;
+  bannedAt: number;
+  expiresAt: number | null;
 }
