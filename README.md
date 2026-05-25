@@ -1,7 +1,6 @@
-
 <div align="center">
 
-# MQCC
+# QueueZero
 
 ### Mod Queue Command Center
 
@@ -12,9 +11,9 @@ A real-time moderation dashboard for Reddit built on the Devvit platform.
 [![React](https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black)](https://react.dev/)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
 
-Replaces the flat mod queue with a priority-scored, context-enriched interface that detects coordinated spam patterns, surfaces anomaly alerts, exposes bulk action workflows, and provides a community-facing leaderboard.
+Replaces the flat mod queue with a priority-scored, context-enriched interface that detects coordinated spam, surfaces ban evasion, exposes bulk action workflows, and provides a community-facing leaderboard.
 
-**[Install from App Directory](https://developers.reddit.com/apps/queuezero)** | **[Watch Demo](https://youtu.be/7FU9GlGYx6Q)**
+**[Install from App Directory](https://developers.reddit.com/apps/queuezero)** | **[Watch Demo](https://youtu.be/Avb5u035dDo)**
 
 </div>
 
@@ -28,11 +27,11 @@ Reddit's native mod queue presents reported items as an unsorted flat list. Mode
 |:--|:--|
 | No severity ranking | A 15-report post looks the same as a single-report item |
 | No inline user context | Every item evaluated in isolation without account history |
-| No pattern awareness | Coordinated spam requires manual identification |
+| No pattern awareness | Coordinated spam and ban evasion require manual identification |
 | No bulk operations | Cleaning 20 spam posts means 20 individual action cycles |
 | No community transparency | Non-mod members have no visibility into community activity |
 
-MQCC resolves all five in a single Devvit installation.
+QueueZero resolves all five in a single Devvit installation.
 
 ---
 
@@ -40,7 +39,7 @@ MQCC resolves all five in a single Devvit installation.
 
 <div align="center">
 
-[![MQCC Demo Video](https://img.shields.io/badge/WATCH_DEMO-FF0000?style=for-the-badge&logo=youtube&logoColor=white)](https://youtu.be/7FU9GlGYx6Q)
+[![QueueZero Demo Video](https://img.shields.io/badge/WATCH_DEMO-FF0000?style=for-the-badge&logo=youtube&logoColor=white)](https://youtu.be/Avb5u035dDo)
 
 </div>
 
@@ -52,22 +51,24 @@ MQCC resolves all five in a single Devvit installation.
 
 | Feature | Description |
 |:--|:--|
-| **Priority Scoring** | 7-factor algorithm scores every item 0 to 100. Critical items surface first. |
-| **User Context** | Account age, karma, prior actions, and queue history visible on every row. |
-| **Pattern Detection** | Identifies link clusters, time bursts, and coordinated username patterns automatically. |
-| **Anomaly Alerts** | Detects report spikes, new account floods, repeat offenders, and ban evasion. |
-| **Bulk Actions** | Select multiple items. Approve, remove, or ban in one step. |
-| **Ban Management** | View all banned users with duration, reason, and one-click unban. |
-| **Workload Analytics** | Mod team activity breakdown with charts, flagged users, and recent action feed. |
-| **Keyboard Shortcuts** | `r` refresh, `a` approve, `x` remove, `Esc` dismiss. |
+| **Priority Scoring** | Weighted algorithm scores every item 0 to 100 based on report count, account age, karma, queue history, prior mod actions, account status, and spam keywords in report reasons. |
+| **Inline User Context** | Account age, karma, action history with specific actions and dates, subreddit posting history, and queue appearance count visible on every row. |
+| **Pattern Detection** | Identifies link clusters, time bursts from new accounts, and coordinated username patterns automatically. |
+| **Ban Evasion Detection** | Stores domains from banned users' content and cross-references new queue items. Combines domain matching with username similarity analysis. |
+| **Anomaly Alerts** | Detects report spikes tracked by velocity, new account floods, repeat offenders, and ban evasion with 2-minute cooldowns. |
+| **Bulk Actions** | Select multiple items. Approve, remove, ban, or remove-and-ban in one step. Domains from banned content stored automatically. |
+| **Ban Management** | View all banned users with duration, reason, issuing moderator, and one-click unban. |
+| **Workload Analytics** | Mod team activity breakdown with per-moderator stats, top flagged users, and recent action feed. |
+| **Settings** | Auto-refresh, compact mode, spam ring grouping, anomaly alerts toggle, and full data reset. |
+| **Keyboard Shortcuts** | `R` refresh, `A` approve, `X` remove, `Esc` dismiss. |
 
 ### Community View
 
 | Feature | Description |
 |:--|:--|
 | **Leaderboard** | Top contributors, most active commenters, and karma rankings. |
-| **Viewer Rank** | Every member sees their own position highlighted. |
-| **Trending Posts** | Recent posts with author and timestamp. |
+| **Viewer Rank** | Every member sees their own position highlighted with a dedicated rank card. |
+| **Trending Posts** | Recent posts with author and timestamp. Tap to copy permalink. |
 | **Activity Feed** | Last 5 community actions in real time. |
 | **Private Sub Support** | Works on both public and private subreddits via trigger-based tracking. |
 
@@ -115,10 +116,10 @@ Reddit.com (iframe)
 
 ## Priority Scoring
 
-Every reported item passes through a 7-factor weighted algorithm:
+Every reported item passes through a weighted algorithm:
 
 ```
-Score: 0 -----> 25 -----> 50 -----> 75 -----> 100
+Score: 0 -----> 30 -----> 55 -----> 80 -----> 100
        |        |          |         |         |
        low      medium     high      critical
       (gray)   (yellow)  (orange)    (red)
@@ -134,7 +135,22 @@ Score: 0 -----> 25 -----> 50 -----> 75 -----> 100
 | Shadowbanned | +15 | Flat bonus |
 | Suspended | +15 | Flat bonus |
 
-Spam keywords in report reasons add 10 points each. Final score capped at 100.
+Spam keywords in report reasons (`spam`, `scam`, `bot`, `phishing`, etc.) add 10 points each, once per reason. Final score capped at 100.
+
+Unknown values (sentinel `-1`) are excluded from scoring.
+
+---
+
+## Ban Evasion Detection
+
+QueueZero cross-references queue items against recently banned users using two methods:
+
+| Method | How it works |
+|:--|:--|
+| **Domain matching** | Stores domains extracted from every banned user's content. New queue items are scanned for the same domains. A brand new account posting the same domain a banned user was sharing gets flagged. |
+| **Username similarity** | Compares new queue item authors against recently banned usernames using string similarity and prefix matching. Accounts with names like `john_doe_2` matching a banned `john_doe` get flagged. |
+
+Neither signal alone is proof of evasion. Combined, they surface accounts worth investigating.
 
 ---
 
@@ -154,10 +170,10 @@ Username patterns detected: `name+numbers`, `name_name`, `auto_` prefix, `bot_` 
 
 | Anomaly | Condition | Severity |
 |:--|:--|:--|
-| Report spike | > 15 reports from 3+ unique authors | High (> 30 = Critical) |
+| Report spike | > 15 reports from 3+ unique authors, tracked by velocity against historical average | High (> 30 = Critical) |
 | New account flood | 3+ queue items from accounts < 7 days old | High (5+ = Critical) |
 | Repeat offenders | 2+ users with 3+ queue appearances | Medium |
-| Ban evasion | 2+ previously actioned users with accounts < 30 days | Critical |
+| Ban evasion | New accounts matching banned user domains or usernames | Critical |
 
 Each anomaly type has a 2-minute cooldown to prevent alert fatigue. State persists across page refreshes via Redis.
 
@@ -173,9 +189,9 @@ Each anomaly type has a 2-minute cooldown to prevent alert fatigue. State persis
 3. Server fetches mod queue from Reddit API
 4. Raw items parsed and cached in Redis (60s TTL)
 5. User profiles fetched in batches of 3 (rate-limit aware)
-6. Context enriched with mod action history and queue appearances
+6. Context enriched with action history, queue appearances, and subreddit posting history
 7. Priority score computed for each item (pure function)
-8. Pattern detection and anomaly analysis run
+8. Pattern detection, ban evasion check, and anomaly analysis run
 9. Fully enriched items returned, sorted by descending score
 ```
 
@@ -200,20 +216,23 @@ Trigger-based tracking works identically on public and private subreddits becaus
 | Method | Path | Purpose |
 |:--|:--|:--|
 | GET | `/api/init` | Resolve user identity and mod status |
+| GET | `/api/permissions` | Check and bootstrap moderator permissions |
 | GET | `/api/queue` | Fetch enriched, priority-scored queue |
 | GET | `/api/anomalies` | Run anomaly detection |
 | GET | `/api/patterns` | Run pattern detection |
 | GET | `/api/workload` | Fetch mod activity statistics |
 | GET | `/api/banned` | Fetch banned users list |
+| GET | `/api/ban-durations` | Fetch available ban duration options |
 | GET | `/api/community` | Fetch community leaderboard |
 | GET | `/api/settings` | Read subreddit settings |
 | POST | `/api/settings` | Update subreddit settings |
+| POST | `/api/settings/reset` | Clear all cached data |
 | POST | `/api/action/approve` | Approve content |
 | POST | `/api/action/remove` | Remove content |
 | POST | `/api/action/lock` | Lock content |
 | POST | `/api/action/ban` | Ban user |
 | POST | `/api/action/unban` | Unban user |
-| POST | `/api/action/removeAndBan` | Remove and ban |
+| POST | `/api/action/removeAndBan` | Remove and ban in one step |
 | POST | `/api/action/bulk` | Execute bulk action |
 | POST | `/api/cleanup` | Clear all cached data |
 
@@ -224,11 +243,11 @@ Trigger-based tracking works identically on public and private subreddits becaus
 ```
 src/
   client/
-    components/                  14 React components
+    components/                  React components
       Dashboard.tsx              Root orchestrator
       PriorityQueue.tsx          Grouped + individual queue rendering
       QueueItem.tsx              Single queue row with actions
-      DetailModal.tsx            Full item detail overlay
+      DetailModal.tsx            Full item detail with action history
       BulkActionBar.tsx          Sticky bulk action bar
       PublicDashboard.tsx        Community-facing leaderboard
       WorkloadTab.tsx            Mod analytics + banned users
@@ -239,25 +258,25 @@ src/
       EmptyState.tsx             Empty state placeholder
       LoadingState.tsx           Skeleton loading
       ErrorBoundary.tsx          React error boundary
-    hooks/                       4 custom hooks
+    hooks/                       Custom hooks
       useQueue.ts                Queue data with auto-refresh and timeout
       useWorkload.ts             Workload statistics
       useSettings.ts             Settings read/write
       usePatterns.ts             Pattern detection
     utils/
       time.ts                    Relative timestamp formatting
-    index.css                    Full design system (90+ CSS variables)
+    index.css                    Design system (90+ CSS custom properties)
     dashboard.html / .tsx        Expanded view entry point
     splash.html / .tsx           Inline feed entry point
   server/
-    core/                        15 server modules
+    core/                        Server modules
       queueFetcher.ts            Mod queue fetching and parsing
-      contextEnricher.ts         User profile enrichment
-      priorityScorer.ts          7-factor scoring algorithm
+      contextEnricher.ts         User profile enrichment with action history
+      priorityScorer.ts          Weighted scoring algorithm
       patternDetector.ts         Link/burst/username detection
-      alertSystem.ts             Anomaly detection with cooldown
+      alertSystem.ts             Anomaly detection with ban evasion cross-reference
       leaderboardTracker.ts      Trigger-based activity tracking
-      modActions.ts              Reddit API action execution
+      modActions.ts              Reddit API action execution with domain storage
       activityTracker.ts         Workload aggregation
       permissions.ts             Mod resolution and bootstrap
       rateLimiter.ts             Sliding-window rate limiter
@@ -266,7 +285,7 @@ src/
       constants.ts               Key patterns and TTL values
       logger.ts                  Structured JSON logger
       post.ts                    Dashboard post management
-    routes/                      5 route files
+    routes/                      Route files
       api.ts                     REST API endpoints
       community.ts               Community leaderboard route
       forms.ts                   Form submission handlers
@@ -293,7 +312,7 @@ src/
 | `mqcc:anomalies:{id}` | Persisted anomalies | 5 minutes |
 | `mqcc:storedmods:{id}` | Moderator list | 365 days |
 | `mqcc:lb:{id}` | Community leaderboard | 30 days |
-| `mqcc:banned:{id}` | Banned user records | 30 days |
+| `mqcc:banned:{id}` | Banned user records with domains | 30 days |
 | `mqcc:ratelimit:{id}` | Rate limit timestamps | 2x window |
 
 ---
@@ -306,8 +325,8 @@ npm run test
 
 | Suite | Cases | Coverage |
 |:--|:--|:--|
-| `priorityScorer.test.ts` | 28 | All 7 factors, keywords, caps, severity levels |
-| `patternDetector.test.ts` | 15 | Link clusters, time bursts, username patterns, combined scenarios |
+| `priorityScorer.test.ts` | 28+ | All factors, keywords, caps, severity levels, edge cases |
+| `patternDetector.test.ts` | 15+ | Link clusters, time bursts, username patterns, combined scenarios |
 
 ```bash
 npm run type-check    # TypeScript type checking
@@ -355,23 +374,6 @@ npm run launch    # deploy + publish to App Directory
 
 ---
 
-## Design System
-
-| Token | Value | Usage |
-|:--|:--|:--|
-| Background | `#000000` | Base surface |
-| Accent | `#8b5cf6` | Primary actions and highlights |
-| Critical | `#f43f5e` | Critical severity indicators |
-| High | `#f59e0b` | High severity indicators |
-| Success | `#10b981` | Approve and success states |
-| Font Display | Space Grotesk | Headings and labels |
-| Font Body | Inter | Body text |
-| Font Mono | JetBrains Mono | Data, scores, and timestamps |
-
-40+ CSS custom properties for colors, spacing, radius, shadows, and typography.
-
----
-
 ## License
 
 MIT
@@ -380,7 +382,7 @@ MIT
 
 <div align="center">
 
-**[Install MQCC](https://developers.reddit.com/apps/queuezero)** | **[Watch Demo](https://youtu.be/7FU9GlGYx6Q)** | **[Report Issues](https://github.com/arubara2021/Reddit_MQCC/issues)**
+**[Install QueueZero](https://developers.reddit.com/apps/queuezero)** | **[Watch Demo](https://youtu.be/Avb5u035dDo)** | **[Report Issues](https://github.com/arubara2021/Reddit_MQCC/issues)**
 
 Built with [Devvit](https://developers.reddit.com/) for the Reddit Mod Tools Hackathon.
 
