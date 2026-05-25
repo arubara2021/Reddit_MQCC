@@ -380,7 +380,7 @@ MIT
 
 <div align="center">
 
-**[Install MQCC](https://developers.reddit.com/apps/queuezero)** | **[Watch Demo](https://youtu.be/Avb5u035dDo)** | **[Report Issues](https://github.com/arubara2021/Reddit_MQCC/issues)**
+**[Install MQCC](https://developers.reddit.com/apps/queuezero)** | **[Watch Demo](https://youtu.be/7FU9GlGYx6Q)** | **[Report Issues](https://github.com/arubara2021/Reddit_MQCC/issues)**
 
 Built with [Devvit](https://developers.reddit.com/) for the Reddit Mod Tools Hackathon.
 
