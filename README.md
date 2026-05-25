@@ -14,7 +14,7 @@ A real-time moderation dashboard for Reddit built on the Devvit platform.
 
 Replaces the flat mod queue with a priority-scored, context-enriched interface that detects coordinated spam patterns, surfaces anomaly alerts, exposes bulk action workflows, and provides a community-facing leaderboard.
 
-**[Install from App Directory](https://developers.reddit.com/apps/queuezero)** | **[Watch Demo](https://youtu.be/Avb5u035dDo)**
+**[Install from App Directory](https://developers.reddit.com/apps/queuezero)** | **[Watch Demo](https://youtu.be/7FU9GlGYx6Q)**
 
 </div>
 
