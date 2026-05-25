@@ -13,7 +13,7 @@ A real-time moderation dashboard for Reddit built on the Devvit platform.
 
 Replaces the flat mod queue with a priority-scored, context-enriched interface that detects coordinated spam, surfaces ban evasion, exposes bulk action workflows, and provides a community-facing leaderboard.
 
-**[Install from App Directory](https://developers.reddit.com/apps/queuezero)** | **[Watch Demo](https://youtu.be/Avb5u035dDo)**
+**[Install from App Directory](https://developers.reddit.com/apps/queuezero)** | **[Watch Demo](https://youtu.be/7FU9GlGYx6Q)**
 
 </div>
 
@@ -39,7 +39,7 @@ QueueZero resolves all five in a single Devvit installation.
 
 <div align="center">
 
-[![QueueZero Demo Video](https://img.shields.io/badge/WATCH_DEMO-FF0000?style=for-the-badge&logo=youtube&logoColor=white)](https://youtu.be/Avb5u035dDo)
+[![QueueZero Demo Video](https://img.shields.io/badge/WATCH_DEMO-FF0000?style=for-the-badge&logo=youtube&logoColor=white)](https://youtu.be/7FU9GlGYx6Q)
 
 </div>
 
@@ -382,7 +382,7 @@ MIT
 
 <div align="center">
 
-**[Install QueueZero](https://developers.reddit.com/apps/queuezero)** | **[Watch Demo](https://youtu.be/Avb5u035dDo)** | **[Report Issues](https://github.com/arubara2021/Reddit_MQCC/issues)**
+**[Install QueueZero](https://developers.reddit.com/apps/queuezero)** | **[Watch Demo](https://youtu.be/7FU9GlGYx6Q)** | **[Report Issues](https://github.com/arubara2021/Reddit_MQCC/issues)**
 
 Built with [Devvit](https://developers.reddit.com/) for the Reddit Mod Tools Hackathon.
 
