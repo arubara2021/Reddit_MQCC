@@ -40,7 +40,7 @@ MQCC resolves all five in a single Devvit installation.
 
 <div align="center">
 
-[![MQCC Demo Video](https://img.shields.io/badge/WATCH_DEMO-FF0000?style=for-the-badge&logo=youtube&logoColor=white)](https://youtu.be/Avb5u035dDo)
+[![MQCC Demo Video](https://img.shields.io/badge/WATCH_DEMO-FF0000?style=for-the-badge&logo=youtube&logoColor=white)](https://youtu.be/7FU9GlGYx6Q)
 
 </div>
 
